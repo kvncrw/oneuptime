@@ -1,34 +1,79 @@
 # syntax=docker/dockerfile:1.7
 
-# Reuse the fork's Debian dependency layers, but discard every source file
-# before copying the 13.0.8 tree. The 13.0.8 release lockfile is stale and its
-# stock Dockerfile cannot reproduce the already-published image with npm ci.
-FROM ghcr.io/kvncrw/oneuptime-app:discord-liveguild AS community
+# The 13.0.8 App lockfile is stale, so its stock Dockerfile cannot reproduce
+# the published release with npm ci. Resolve the committed 13.0.8 manifests in
+# a Debian image, then compile both Common and App before publishing.
+FROM public.ecr.aws/docker/library/node:26-bookworm-slim AS community
 
-USER root
+RUN mkdir -p /var/cache/oneuptime/npm \
+    && chmod 2777 /var/cache/oneuptime/npm \
+    && chown 1000:1000 /var/cache/oneuptime/npm \
+    && npm config set cache /var/cache/oneuptime/npm --global \
+    && npm config set fetch-retries 5 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 60000 \
+    && npm config set foreground-scripts true \
+    && npm config set install-links false --global
 
-RUN mkdir -p /dependency-cache/app-features \
-    && mv /usr/src/Common/node_modules /dependency-cache/common-node_modules \
-    && mv /usr/src/app/node_modules /dependency-cache/app-node_modules \
-    && for feature in Accounts Dashboard AdminDashboard StatusPage PublicDashboard BrowserRecorder; do \
-         if [ -d "/usr/src/app/FeatureSet/$feature/node_modules" ]; then \
-           mv "/usr/src/app/FeatureSet/$feature/node_modules" "/dependency-cache/app-features/$feature"; \
-         fi; \
-       done \
-    && rm -rf /usr/src/Common /usr/src/app \
-    && mkdir -p /usr/src/Common /usr/src/app/FeatureSet \
-    && mv /dependency-cache/common-node_modules /usr/src/Common/node_modules \
-    && mv /dependency-cache/app-node_modules /usr/src/app/node_modules \
-    && for feature in Accounts Dashboard AdminDashboard StatusPage PublicDashboard BrowserRecorder; do \
-         if [ -d "/dependency-cache/app-features/$feature" ]; then \
-           mkdir -p "/usr/src/app/FeatureSet/$feature"; \
-           mv "/dependency-cache/app-features/$feature" "/usr/src/app/FeatureSet/$feature/node_modules"; \
-         fi; \
-       done \
-    && rmdir /dependency-cache/app-features /dependency-cache
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PRODUCTION=true
 
-COPY --chown=1000:1000 ./packages/Common /usr/src/Common
-COPY --chown=1000:1000 ./packages/App /usr/src/app
+LABEL org.opencontainers.image.title="OneUptime App"
+LABEL org.opencontainers.image.source="https://github.com/OneUptime/oneuptime"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash curl ca-certificates python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+SHELL ["/bin/bash", "-c"]
+
+WORKDIR /usr/src/Common
+COPY ./packages/Common/package*.json ./
+RUN --mount=type=cache,target=/var/cache/oneuptime/npm \
+    npm install --package-lock=false --prefer-offline
+COPY --chown=1000:1000 ./packages/Common ./
+RUN npm run compile
+
+WORKDIR /usr/src/app
+COPY ./packages/App/package*.json ./
+RUN --mount=type=cache,target=/var/cache/oneuptime/npm \
+    npm install --package-lock=false --prefer-offline
+
+WORKDIR /usr/src/app/FeatureSet/Accounts
+COPY ./packages/App/FeatureSet/Accounts/package*.json ./
+RUN --mount=type=cache,target=/var/cache/oneuptime/npm \
+    npm install --package-lock=false --prefer-offline
+
+WORKDIR /usr/src/app/FeatureSet/Dashboard
+COPY ./packages/App/FeatureSet/Dashboard/package*.json ./
+RUN --mount=type=cache,target=/var/cache/oneuptime/npm \
+    npm install --package-lock=false --prefer-offline
+
+WORKDIR /usr/src/app/FeatureSet/AdminDashboard
+COPY ./packages/App/FeatureSet/AdminDashboard/package*.json ./
+RUN --mount=type=cache,target=/var/cache/oneuptime/npm \
+    npm install --package-lock=false --prefer-offline
+
+WORKDIR /usr/src/app/FeatureSet/StatusPage
+COPY ./packages/App/FeatureSet/StatusPage/package*.json ./
+RUN --mount=type=cache,target=/var/cache/oneuptime/npm \
+    npm install --package-lock=false --prefer-offline
+
+WORKDIR /usr/src/app/FeatureSet/PublicDashboard
+COPY ./packages/App/FeatureSet/PublicDashboard/package*.json ./
+RUN --mount=type=cache,target=/var/cache/oneuptime/npm \
+    npm install --package-lock=false --prefer-offline
+
+WORKDIR /usr/src/app/FeatureSet/BrowserRecorder
+COPY ./packages/App/FeatureSet/BrowserRecorder/package*.json ./
+RUN --mount=type=cache,target=/var/cache/oneuptime/npm \
+    npm install --package-lock=false --prefer-offline
+
+RUN apt-get purge -y --auto-remove python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src/app
 
 ARG GIT_SHA
 ARG APP_VERSION
@@ -37,11 +82,14 @@ ENV APP_VERSION=${APP_VERSION}
 LABEL org.opencontainers.image.revision="${GIT_SHA}"
 LABEL org.opencontainers.image.version="${APP_VERSION}"
 
-RUN cd /usr/src/Common \
-    && npm run compile \
-    && cd /usr/src/app \
-    && npm run build-frontends:prod \
+COPY --chown=1000:1000 ./packages/App ./
+RUN npm run build-frontends:prod \
     && npm run compile
 
-WORKDIR /usr/src/app
+COPY ./LICENSE /usr/src/LICENSE
+
+EXPOSE 3002
+ENV IS_ENTERPRISE_EDITION=false
+ENV TS_NODE_TRANSPILE_ONLY=1
 USER node
+CMD ["npm", "start"]
