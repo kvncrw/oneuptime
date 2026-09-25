@@ -16,11 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-gomplate
-      - name: Generate Dockerfiles
-        run: npm run prerun
-        env:
-          NO_COLOR: "1"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Login to GHCR
@@ -35,4 +30,4 @@ jobs:
             -t ghcr.io/kvncrw/oneuptime-app:13.0.8-discord.1 \
             -t ghcr.io/kvncrw/oneuptime-app:${{ github.sha }} \
             --push \
-            -f ./packages/App/Dockerfile .
+            -f ./packages/App/Dockerfile.discord-v13 .

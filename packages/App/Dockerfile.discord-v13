@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:1.7
+
+# Reuse the fork's Debian dependency layers, but discard every source file
+# before copying the 13.0.8 tree. The 13.0.8 release lockfile is stale and its
+# stock Dockerfile cannot reproduce the already-published image with npm ci.
+FROM ghcr.io/kvncrw/oneuptime-app:discord-liveguild AS community
+
+USER root
+
+RUN mkdir -p /dependency-cache/app-features \
+    && mv /usr/src/Common/node_modules /dependency-cache/common-node_modules \
+    && mv /usr/src/app/node_modules /dependency-cache/app-node_modules \
+    && for feature in Accounts Dashboard AdminDashboard StatusPage PublicDashboard BrowserRecorder; do \
+         if [ -d "/usr/src/app/FeatureSet/$feature/node_modules" ]; then \
+           mv "/usr/src/app/FeatureSet/$feature/node_modules" "/dependency-cache/app-features/$feature"; \
+         fi; \
+       done \
+    && rm -rf /usr/src/Common /usr/src/app \
+    && mkdir -p /usr/src/Common /usr/src/app/FeatureSet \
+    && mv /dependency-cache/common-node_modules /usr/src/Common/node_modules \
+    && mv /dependency-cache/app-node_modules /usr/src/app/node_modules \
+    && for feature in Accounts Dashboard AdminDashboard StatusPage PublicDashboard BrowserRecorder; do \
+         if [ -d "/dependency-cache/app-features/$feature" ]; then \
+           mkdir -p "/usr/src/app/FeatureSet/$feature"; \
+           mv "/dependency-cache/app-features/$feature" "/usr/src/app/FeatureSet/$feature/node_modules"; \
+         fi; \
+       done \
+    && rmdir /dependency-cache/app-features /dependency-cache
+
+COPY --chown=1000:1000 ./packages/Common /usr/src/Common
+COPY --chown=1000:1000 ./packages/App /usr/src/app
+
+ARG GIT_SHA
+ARG APP_VERSION
+ENV GIT_SHA=${GIT_SHA}
+ENV APP_VERSION=${APP_VERSION}
+LABEL org.opencontainers.image.revision="${GIT_SHA}"
+LABEL org.opencontainers.image.version="${APP_VERSION}"
+
+RUN cd /usr/src/Common \
+    && npm run compile \
+    && cd /usr/src/app \
+    && npm run build-frontends:prod \
+    && npm run compile
+
+WORKDIR /usr/src/app
+USER node
