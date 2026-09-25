@@ -1,5 +1,8 @@
 # Fork-only (kvncrw/oneuptime): build the App image at this branch for the
 # HOM-37 throwaway Railway env. Never intended for the upstream PR.
+# Uses a direct buildx push because Scripts/GHA/build_docker_images.sh
+# hardcodes the upstream Docker Hub / ghcr.io/oneuptime namespaces, which the
+# fork's GITHUB_TOKEN cannot push to.
 name: discord-liveguild-image
 on:
   push:
@@ -17,7 +20,6 @@ jobs:
       - name: Generate Dockerfiles
         run: npm run prerun
         env:
-          # Match what the local E2E snapshot build does.
           NO_COLOR: "1"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -25,10 +27,11 @@ jobs:
         run: echo "${{ secrets.GITHUB_TOKEN }}" | bash ./Scripts/GHA/docker_login.sh --registry ghcr.io --username "${{ github.repository_owner }}"
       - name: Build and push App (community)
         run: |
-          bash ./Scripts/GHA/build_docker_images.sh \
-            --image app \
-            --version "discord-liveguild" \
-            --dockerfile ./packages/App/Dockerfile \
-            --context . \
-            --platforms linux/amd64 \
-            --git-sha "${{ github.sha }}"
+          docker buildx build \
+            --target community \
+            --platform linux/amd64 \
+            --build-arg GIT_SHA="${{ github.sha }}" \
+            -t ghcr.io/kvncrw/oneuptime-app:discord-liveguild \
+            -t ghcr.io/kvncrw/oneuptime-app:${{ github.sha }} \
+            --push \
+            -f ./packages/App/Dockerfile .
