@@ -1,12 +1,12 @@
-# Fork-only (kvncrw/oneuptime): build the App image at this branch for the
-# HOM-37 throwaway Railway env. Never intended for the upstream PR.
+# Fork-only (kvncrw/oneuptime): build the 13.0.8 Discord backport App image.
+# Never intended for the upstream PR.
 # Uses a direct buildx push because Scripts/GHA/build_docker_images.sh
 # hardcodes the upstream Docker Hub / ghcr.io/oneuptime namespaces, which the
 # fork's GITHUB_TOKEN cannot push to.
-name: discord-liveguild-image
+name: discord-v13-image
 on:
   push:
-    branches: [ci/discord-liveguild]
+    branches: [feat/discord-workspace-13.0.8]
   workflow_dispatch:
 permissions:
   contents: read
@@ -31,7 +31,8 @@ jobs:
             --target community \
             --platform linux/amd64 \
             --build-arg GIT_SHA="${{ github.sha }}" \
-            -t ghcr.io/kvncrw/oneuptime-app:discord-liveguild \
+            --build-arg APP_VERSION="13.0.8" \
+            -t ghcr.io/kvncrw/oneuptime-app:13.0.8-discord.1 \
             -t ghcr.io/kvncrw/oneuptime-app:${{ github.sha }} \
             --push \
             -f ./packages/App/Dockerfile .

@@ -52,6 +52,40 @@ export interface WorkspaceChannel {
 }
 
 export default class WorkspaceBase {
+  /*
+   * Providers sometimes throw HTTP response objects rather than Error
+   * instances. Normalize every supported shape before exposing a send failure.
+   */
+  public static getSendErrorMessage(err: unknown): string {
+    const unknownErrorMessage: string = "Unknown error";
+
+    if (err === null || err === undefined) {
+      return unknownErrorMessage;
+    }
+
+    if (err instanceof Error) {
+      return err.message || unknownErrorMessage;
+    }
+
+    if (err instanceof HTTPErrorResponse) {
+      return err.message || `Request failed with HTTP status ${err.statusCode}`;
+    }
+
+    if (typeof err === "string") {
+      return err || unknownErrorMessage;
+    }
+
+    if (typeof err === "object") {
+      const message: unknown = (err as { message?: unknown }).message;
+
+      if (typeof message === "string" && message) {
+        return message;
+      }
+    }
+
+    return String(err);
+  }
+
   @CaptureSpan()
   public static async isUserInDirectMessageChannel(_data: {
     authToken: string;

@@ -328,6 +328,32 @@ export default abstract class GlobalCache {
     return result === 1;
   }
 
+  /*
+   * Consume a single-use value atomically. Reading and deleting in separate
+   * commands would let concurrent OAuth callbacks spend the same state twice.
+   */
+  @CaptureSpan()
+  public static async getAndDeleteString(
+    namespace: string,
+    key: string,
+  ): Promise<string | null> {
+    const client: ClientType | null = Redis.getClient();
+
+    if (!client || !Redis.isConnected()) {
+      throw new DatabaseNotConnectedException("Cache is not connected");
+    }
+
+    const result: unknown = await client.eval(
+      "local value = redis.call('GET', KEYS[1]) " +
+        "if value then redis.call('DEL', KEYS[1]) end " +
+        "return value",
+      1,
+      `${namespace}-${key}`,
+    );
+
+    return typeof result === "string" && result ? result : null;
+  }
+
   @CaptureSpan()
   public static async deleteKey(namespace: string, key: string): Promise<void> {
     const client: ClientType | null = Redis.getClient();
