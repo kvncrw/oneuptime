@@ -1,4 +1,4 @@
-import { monitorEventLoopDelay, IntervalHistogram } from "perf_hooks";
+import { monitorEventLoopDelay } from "perf_hooks";
 import type { Attributes, ObservableResult } from "@opentelemetry/api";
 import Telemetry from "../Telemetry";
 import logger from "../Logger";
@@ -18,7 +18,9 @@ export default class RuntimeMetrics {
   private static lastCpuUsage: NodeJS.CpuUsage | null = null;
   private static lastCpuSampleTimestampNs: bigint | null = null;
 
-  private static eventLoopHistogram: IntervalHistogram | null = null;
+  private static eventLoopHistogram: ReturnType<
+    typeof monitorEventLoopDelay
+  > | null = null;
 
   public static init(): void {
     if (this.initialized) {

@@ -30,10 +30,6 @@ SHELL ["/bin/bash", "-c"]
 
 WORKDIR /usr/src/Common
 COPY ./packages/Common/package*.json ./
-RUN --mount=type=cache,target=/var/cache/oneuptime/npm \
-    npm install --package-lock=false --prefer-offline
-COPY --chown=1000:1000 ./packages/Common ./
-RUN npm run compile
 
 WORKDIR /usr/src/app
 COPY ./packages/App/package*.json ./
@@ -69,6 +65,15 @@ WORKDIR /usr/src/app/FeatureSet/BrowserRecorder
 COPY ./packages/App/FeatureSet/BrowserRecorder/package*.json ./
 RUN --mount=type=cache,target=/var/cache/oneuptime/npm \
     npm install --package-lock=false --prefer-offline
+
+# App links Common through file:../Common. Installing App after Common prunes
+# the sibling dependency tree, so install and compile Common only after every
+# App package has finished resolving.
+WORKDIR /usr/src/Common
+RUN --mount=type=cache,target=/var/cache/oneuptime/npm \
+    npm install --package-lock=false --prefer-offline
+COPY --chown=1000:1000 ./packages/Common ./
+RUN npm run compile
 
 RUN apt-get purge -y --auto-remove python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
