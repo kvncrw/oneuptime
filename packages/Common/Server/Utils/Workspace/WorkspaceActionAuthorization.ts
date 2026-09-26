@@ -1,4 +1,7 @@
 import TeamMember from "../../../Models/DatabaseModels/TeamMember";
+import DatabaseBaseModel, {
+  DatabaseBaseModelType,
+} from "../../../Models/DatabaseModels/DatabaseBaseModel/DatabaseBaseModel";
 import DatabaseCommonInteractionProps from "../../../Types/BaseDatabase/DatabaseCommonInteractionProps";
 import LIMIT_MAX from "../../../Types/Database/LimitMax";
 import NotAuthorizedException from "../../../Types/Exception/NotAuthorizedException";
@@ -8,8 +11,22 @@ import {
   UserTenantAccessPermission,
 } from "../../../Types/Permission";
 import AccessTokenService from "../../Services/AccessTokenService";
+import DatabaseService from "../../Services/DatabaseService";
 import TeamMemberService from "../../Services/TeamMemberService";
+import ModelPermission from "../../Types/Database/Permissions/Index";
+import Query from "../../Types/Database/Query";
+import Select from "../../Types/Database/Select";
 import CaptureSpan from "../Telemetry/CaptureSpan";
+
+/*
+ * A resource a chat action is performed against: the incident being
+ * acknowledged, the on-call policy being executed.
+ */
+export interface WorkspaceActionResource {
+  // The service that owns the resource, e.g. IncidentService.
+  service: DatabaseService<DatabaseBaseModel>;
+  id: ObjectID;
+}
 
 /*
  * Build the authorization context for a chat user from current project
@@ -54,6 +71,100 @@ export default class WorkspaceActionAuthorization {
       },
       userTeamIds,
     };
+  }
+
+  /*
+   * Throws NotAuthorizedException, with a message fit to show the user in
+   * chat, unless `props` may create a `modelType` row and read every one of
+   * `resources` in props.tenantId. `action` completes "You do not have
+   * permission to ...", e.g. "acknowledge this incident".
+   */
+  @CaptureSpan()
+  public static async assertCanCreate(data: {
+    props: DatabaseCommonInteractionProps;
+    modelType: DatabaseBaseModelType;
+    action: string;
+    resources?: Array<WorkspaceActionResource> | undefined;
+  }): Promise<void> {
+    const { props, modelType, action } = data;
+    const projectId: ObjectID | undefined = props.tenantId;
+
+    if (!props.userId || !projectId) {
+      throw new NotAuthorizedException(
+        `You do not have permission to ${action}.`,
+      );
+    }
+
+    try {
+      ModelPermission.checkCreatePermissions(modelType, new modelType(), props);
+    } catch (err) {
+      if (err instanceof NotAuthorizedException) {
+        throw new NotAuthorizedException(
+          `You do not have permission to ${action}. ${err.message}`,
+        );
+      }
+
+      throw err;
+    }
+
+    for (const resource of data.resources || []) {
+      let readableResource: DatabaseBaseModel | null = null;
+
+      try {
+        readableResource = await resource.service.findOneBy({
+          query: {
+            _id: resource.id.toString(),
+            projectId: projectId,
+          } as Query<DatabaseBaseModel>,
+          select: {
+            _id: true,
+          } as Select<DatabaseBaseModel>,
+          props: props,
+        });
+      } catch (err) {
+        if (!(err instanceof NotAuthorizedException)) {
+          throw err;
+        }
+      }
+
+      if (!readableResource) {
+        const resourceName: string = (
+          resource.service.getModel().singularName || "resource"
+        ).toLowerCase();
+
+        throw new NotAuthorizedException(
+          `You do not have permission to ${action}: the ${resourceName} was not found in this project, or you do not have access to it.`,
+        );
+      }
+    }
+  }
+
+  /*
+   * getProjectMemberProps followed by assertCanCreate. Returns the user's
+   * props so the caller can pass them on to anything else it writes.
+   */
+  @CaptureSpan()
+  public static async authorize(data: {
+    userId: ObjectID;
+    projectId: ObjectID;
+    modelType: DatabaseBaseModelType;
+    action: string;
+    resources?: Array<WorkspaceActionResource> | undefined;
+  }): Promise<DatabaseCommonInteractionProps> {
+    const props: DatabaseCommonInteractionProps =
+      await this.getProjectMemberProps({
+        userId: data.userId,
+        projectId: data.projectId,
+      });
+
+    await this.assertCanCreate({
+      props: props,
+      modelType: data.modelType,
+      action: data.action,
+      resources: data.resources,
+    });
+
+    return props;
   }
 
   private static async getAcceptedTeamIds(data: {

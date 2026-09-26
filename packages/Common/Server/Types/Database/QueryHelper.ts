@@ -806,6 +806,27 @@ export default class QueryHelper {
     }, jsonQuery.parameters);
   }
 
+  /*
+   * Matches a jsonb column that contains the given JSON document or array
+   * element (Postgres @> containment). Used by chat-channel syncs to find
+   * incidents whose postUpdatesToWorkspaceChannels jsonb array contains a
+   * given channel/workspace entry.
+   */
+  public static jsonContains(
+    value: JSONObject | Array<JSONObject>,
+  ): FindWhereProperty<any> {
+    const rid: string = Text.generateRandomText(10);
+
+    return Raw(
+      (alias: string) => {
+        return `(${alias} @> CAST(:${rid} AS JSONB))`;
+      },
+      {
+        [rid]: JSON.stringify(value),
+      },
+    ) as FindWhereProperty<any>;
+  }
+
   /**
    * Matches a jsonb document whose named array contains an object with a
    * particular discriminator and whose second named property contains any of

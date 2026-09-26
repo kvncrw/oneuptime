@@ -106,6 +106,7 @@ import VMwareVCenterOwnerRuleService from "./VMwareVCenterOwnerRuleService";
 import VMwareVCenterOwnerTeamService from "./VMwareVCenterOwnerTeamService";
 import VMwareVCenterOwnerUserService from "./VMwareVCenterOwnerUserService";
 import CephClusterOwnerUserService from "./CephClusterOwnerUserService";
+import DiscordResourceThreadService from "./DiscordResourceThreadService";
 import LlmProviderService from "./LlmProviderService";
 import DataSourceService from "./DataSourceService";
 import AuditLogService from "./AuditLogService";
@@ -400,6 +401,7 @@ import WorkspaceUserAuthTokenService from "./WorkspaceUserAuthTokenService";
 import WorkspaceSettingService from "./WorkspaceSettingService";
 import WorkspaceNotificationRuleService from "./WorkspaceNotificationRuleService";
 import WorkspaceNotificationLogService from "./WorkspaceNotificationLogService";
+import DiscordReactionObservationService from "./DiscordReactionObservationService";
 import WorkspaceNotificationSummaryService from "./WorkspaceNotificationSummaryService";
 import WorkspaceUserNotificationService from "./WorkspaceUserNotificationService";
 import OnCallDutyPolicyUserOverrideService from "./OnCallDutyPolicyUserOverrideService";
@@ -570,6 +572,7 @@ const services: Array<BaseService> = [
   VMwareVCenterOwnerRuleService,
   VMwareVCenterOwnerTeamService,
   VMwareVCenterOwnerUserService,
+  DiscordResourceThreadService,
   LlmProviderService,
   DataSourceService,
 
@@ -830,6 +833,7 @@ const services: Array<BaseService> = [
   WorkspaceSettingService,
   WorkspaceNotificationRuleService,
   WorkspaceNotificationLogService,
+  DiscordReactionObservationService,
   WorkspaceNotificationSummaryService,
   WorkspaceUserNotificationService,
 

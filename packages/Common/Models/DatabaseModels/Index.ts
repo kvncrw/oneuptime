@@ -69,6 +69,7 @@ import CloudResourceOwnerTeam from "./CloudResourceOwnerTeam";
 import CloudResourceOwnerUser from "./CloudResourceOwnerUser";
 import CloudResourceLabelRule from "./CloudResourceLabelRule";
 import CloudResourceOwnerRule from "./CloudResourceOwnerRule";
+import DiscordResourceThread from "./DiscordResourceThread";
 import RumApplication from "./RumApplication";
 import RumApplicationOwnerTeam from "./RumApplicationOwnerTeam";
 import RumApplicationOwnerUser from "./RumApplicationOwnerUser";
@@ -260,6 +261,7 @@ import TelegramLog from "./TelegramLog";
 import WebhookLog from "./WebhookLog";
 import PushNotificationLog from "./PushNotificationLog";
 import WorkspaceNotificationLog from "./WorkspaceNotificationLog";
+import DiscordReactionObservation from "./DiscordReactionObservation";
 // Status Page
 import StatusPage from "./StatusPage";
 import StatusPageAnnouncement from "./StatusPageAnnouncement";
@@ -740,6 +742,7 @@ const AllModelTypes: Array<{
   WebhookLog,
   PushNotificationLog,
   WorkspaceNotificationLog,
+  DiscordReactionObservation,
   CallLog,
   EmailLog,
 
@@ -961,6 +964,7 @@ const AllModelTypes: Array<{
   CloudResourceOwnerUser,
   CloudResourceLabelRule,
   CloudResourceOwnerRule,
+  DiscordResourceThread,
   RumApplication,
   RumApplicationOwnerTeam,
   RumApplicationOwnerUser,

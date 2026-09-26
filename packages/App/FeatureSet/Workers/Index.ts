@@ -159,6 +159,8 @@ import "./Jobs/StatusPage/SendReportsToSubscribers";
 // Workspace Notification Summaries
 import "./Jobs/WorkspaceNotificationSummary/SendSummary";
 
+// Discord: save pinned / reaction-saved channel messages as notes
+import "./Jobs/Discord/SyncReactionNotes";
 // Owner Email Burst Rollups
 import "./Jobs/EmailRollup/FlushDueRollups";
 

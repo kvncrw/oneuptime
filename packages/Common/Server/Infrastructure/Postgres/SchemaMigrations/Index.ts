@@ -1,5 +1,7 @@
 import { AddAIInvestigationDecision1793700000000 } from "./1793700000000-AddAIInvestigationDecision";
 import { RemoveMonitorDescriptionLengthLimit1793800000000 } from "./1793800000000-RemoveMonitorDescriptionLengthLimit";
+import { AddDiscordResourceThread1795200000000 } from "./1795200000000-AddDiscordResourceThread";
+import { AddDiscordResourceThreadRetiredThreadIds1795200000001 } from "./1795200000001-AddDiscordResourceThreadRetiredThreadIds";
 import { AddConfigurableRuleCriteria1792500000000 } from "./1792500000000-AddConfigurableRuleCriteria";
 import { AddGoogleSecOpsDiagnostics1792300000000 } from "./1792300000000-AddGoogleSecOpsDiagnostics";
 import { AddIncomingCallPolicyPhoneNumbers1792600000000 } from "./1792600000000-AddIncomingCallPolicyPhoneNumbers";
@@ -15,6 +17,8 @@ import { MakeOwnerRowsUnique1793500000000 } from "./1793500000000-MakeOwnerRowsU
 import { AddSloBurnRateRuleIncidents1792400000000 } from "./1792400000000-AddSloBurnRateRuleIncidents";
 import { AddUserWebAuthnPurpose1792200000000 } from "./1792200000000-AddUserWebAuthnPurpose";
 import InitialMigration from "./1717605043663-InitialMigration";
+import { CreateDiscordReactionObservation1790370425604 } from "./1790370425604-CreateDiscordReactionObservation";
+import { AddObservedAtToDiscordReactionObservation1795301000000 } from "./1795301000000-AddObservedAtToDiscordReactionObservation";
 import { MigrationName1717678334852 } from "./1717678334852-MigrationName";
 import { MigrationName1717839110671 } from "./1717839110671-MigrationName";
 import { MigrationName1717849921874 } from "./1717849921874-MigrationName";
@@ -1200,4 +1204,8 @@ export default [
   MakeOwnerRowsUnique1793500000000,
   AddAIInvestigationDecision1793700000000,
   RemoveMonitorDescriptionLengthLimit1793800000000,
+  CreateDiscordReactionObservation1790370425604,
+  AddDiscordResourceThread1795200000000,
+  AddDiscordResourceThreadRetiredThreadIds1795200000001,
+  AddObservedAtToDiscordReactionObservation1795301000000,
 ];
