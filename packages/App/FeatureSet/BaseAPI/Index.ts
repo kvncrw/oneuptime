@@ -108,6 +108,7 @@ import UserIncomingCallNumberAPI from "Common/Server/API/UserIncomingCallNumberA
 import UserWhatsAppAPI from "Common/Server/API/UserWhatsAppAPI";
 import UserTelegramAPI from "Common/Server/API/UserTelegramAPI";
 import UserSlackAPI from "Common/Server/API/UserSlackAPI";
+import UserDiscordAPI from "Common/Server/API/UserDiscordAPI";
 import UserMicrosoftTeamsAPI from "Common/Server/API/UserMicrosoftTeamsAPI";
 import UserWebhookAPI from "Common/Server/API/UserWebhookAPI";
 import UserPushAPI from "Common/Server/API/UserPushAPI";
@@ -756,6 +757,11 @@ import CephClusterOwnerTeamService, {
 import CephClusterOwnerUserService, {
   Service as CephClusterOwnerUserServiceType,
 } from "Common/Server/Services/CephClusterOwnerUserService";
+import DiscordResourceThread from "Common/Models/DatabaseModels/DiscordResourceThread";
+import DiscordResourceThreadService, {
+  Service as DiscordResourceThreadServiceType,
+} from "Common/Server/Services/DiscordResourceThreadService";
+import DiscordResourceThreadAPI from "Common/Server/API/DiscordResourceThreadAPI";
 import HostService, {
   Service as HostServiceType,
 } from "Common/Server/Services/HostService";
@@ -4527,6 +4533,14 @@ const BaseAPIFeatureSet: FeatureSet = {
 
     app.use(
       `/${APP_NAME.toLocaleLowerCase()}`,
+      new BaseAPI<DiscordResourceThread, DiscordResourceThreadServiceType>(
+        DiscordResourceThread,
+        DiscordResourceThreadService,
+      ).getRouter(),
+    );
+
+    app.use(
+      `/${APP_NAME.toLocaleLowerCase()}`,
       new BaseAPI<Host, HostServiceType>(Host, HostService).getRouter(),
     );
 
@@ -4986,6 +5000,10 @@ const BaseAPIFeatureSet: FeatureSet = {
     app.use(`/${APP_NAME.toLocaleLowerCase()}`, new DiscordAPI().getRouter());
     app.use(
       `/${APP_NAME.toLocaleLowerCase()}`,
+      new DiscordResourceThreadAPI().getRouter(),
+    );
+    app.use(
+      `/${APP_NAME.toLocaleLowerCase()}`,
       new MicrosoftTeamsAPI().getRouter(),
     );
     app.use(`/${APP_NAME.toLocaleLowerCase()}`, new GitHubAPI().getRouter());
@@ -5029,6 +5047,10 @@ const BaseAPIFeatureSet: FeatureSet = {
     app.use(
       `/${APP_NAME.toLocaleLowerCase()}`,
       new UserMicrosoftTeamsAPI().getRouter(),
+    );
+    app.use(
+      `/${APP_NAME.toLocaleLowerCase()}`,
+      new UserDiscordAPI().getRouter(),
     );
     app.use(
       `/${APP_NAME.toLocaleLowerCase()}`,

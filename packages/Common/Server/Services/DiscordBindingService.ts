@@ -4,6 +4,7 @@ import DatabaseService from "./DatabaseService";
 import ProjectToken from "../../Models/DatabaseModels/WorkspaceProjectAuthToken";
 import UserToken from "../../Models/DatabaseModels/WorkspaceUserAuthToken";
 import UserTokenService from "./WorkspaceUserAuthTokenService";
+import UserDiscordService from "./UserDiscordService";
 import ObjectID from "../../Types/ObjectID";
 import WorkspaceType from "../../Types/Workspace/WorkspaceType";
 import BadDataException from "../../Types/Exception/BadDataException";
@@ -106,16 +107,29 @@ class Service extends DatabaseService<ProjectToken> {
     return await this.locked(
       projectId,
       async (manager: EntityManager): Promise<DiscordBindingSnapshot> => {
-        const rows: BindingRows = await this.rows(manager, projectId, userId);
-        return {
-          fingerprint: this.fingerprint(rows),
-          workspaceProjectId:
-            rows.project && !rows.project.deletedAt
-              ? rows.project.workspaceProjectId
-              : undefined,
-        };
+        return this.snapshotWithManager(projectId, userId, manager);
       },
     );
+  }
+
+  /*
+   * Internal transaction primitive. The caller must already hold this project's
+   * discord-binding advisory lock in the supplied active transaction. Reusing
+   * that manager avoids taking the same lock in a nested transaction.
+   */
+  public async snapshotWithManager(
+    projectId: ObjectID,
+    userId: ObjectID | undefined,
+    manager: EntityManager,
+  ): Promise<DiscordBindingSnapshot> {
+    const rows: BindingRows = await this.rows(manager, projectId, userId);
+    return {
+      fingerprint: this.fingerprint(rows),
+      workspaceProjectId:
+        rows.project && !rows.project.deletedAt
+          ? rows.project.workspaceProjectId
+          : undefined,
+    };
   }
 
   private assertSnapshot(
@@ -248,6 +262,14 @@ class Service extends DatabaseService<ProjectToken> {
           );
         }
         await this.authorize(data.state.projectId, data.state.userId, false);
+        // Methods that page the previous Discord account must not survive a relink.
+        if (rows.user && rows.user.workspaceUserId !== discordUserId) {
+          await UserDiscordService.deleteMethodsForBinding(manager, {
+            scope: "user",
+            projectId: data.state.projectId,
+            userId: data.state.userId,
+          });
+        }
         const values: Partial<UserToken> = {
           projectId: data.state.projectId,
           userId: data.state.userId,
@@ -395,8 +417,18 @@ class Service extends DatabaseService<ProjectToken> {
           authToken: string;
           miscData: Record<string, never>;
         } = { deletedAt: new Date(), authToken: "", miscData: {} };
+        // Personal Discord methods point at these links; they go in this transaction.
+        await UserDiscordService.deleteMethodsForBinding(
+          manager,
+          data.user
+            ? {
+                scope: "user",
+                projectId: data.projectId,
+                userId: (row as UserToken).userId!,
+              }
+            : { scope: "project", projectId: data.projectId },
+        );
         if (!data.user) {
-          // Phase 3 must cascade Discord notification methods here in this same transaction.
           await manager.getRepository(UserToken).update(
             {
               projectId: data.projectId,

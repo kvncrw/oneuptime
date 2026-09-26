@@ -1,19 +1,20 @@
-import { generateKeyPairSync, sign } from "crypto";
+import { generateKeyPairSync, sign, KeyObject } from "crypto";
 import DiscordInteractionSignature from "../../../../Server/Utils/Workspace/Discord/DiscordInteractionSignature";
 
 describe("Discord interaction signature verification", () => {
-  const keys: ReturnType<typeof generateKeyPairSync> =
+  const keyPair: { publicKey: KeyObject; privateKey: KeyObject } =
     generateKeyPairSync("ed25519");
-  const publicKey: string = keys.publicKey
+  const publicKey: string = keyPair.publicKey
     .export({ format: "der", type: "spki" })
     .subarray(-32)
     .toString("hex");
+  const privateKey: KeyObject = keyPair.privateKey;
   const timestamp: string = "1790321000";
   const rawBody: Buffer = Buffer.from('{ "type": 1 }');
   const signature: string = sign(
     null,
     Buffer.concat([Buffer.from(timestamp), rawBody]),
-    keys.privateKey,
+    privateKey,
   ).toString("hex");
   const data: Parameters<typeof DiscordInteractionSignature.verify>[0] & {
     now: number;

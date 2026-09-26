@@ -106,6 +106,7 @@ import VMwareVCenterOwnerRuleService from "./VMwareVCenterOwnerRuleService";
 import VMwareVCenterOwnerTeamService from "./VMwareVCenterOwnerTeamService";
 import VMwareVCenterOwnerUserService from "./VMwareVCenterOwnerUserService";
 import CephClusterOwnerUserService from "./CephClusterOwnerUserService";
+import DiscordResourceThreadService from "./DiscordResourceThreadService";
 import LlmProviderService from "./LlmProviderService";
 import DataSourceService from "./DataSourceService";
 import AuditLogService from "./AuditLogService";
@@ -299,6 +300,7 @@ import UserIncomingCallNumberService from "./UserIncomingCallNumberService";
 import UserWhatsAppService from "./UserWhatsAppService";
 import UserTelegramService from "./UserTelegramService";
 import UserSlackService from "./UserSlackService";
+import UserDiscordService from "./UserDiscordService";
 import UserMicrosoftTeamsService from "./UserMicrosoftTeamsService";
 import WorkflowLogService from "./WorkflowLogService";
 import WorkflowOwnerRuleService from "./WorkflowOwnerRuleService";
@@ -403,6 +405,7 @@ import WorkspaceNotificationLogService from "./WorkspaceNotificationLogService";
 import WorkspaceNotificationSummaryService from "./WorkspaceNotificationSummaryService";
 import WorkspaceUserNotificationService from "./WorkspaceUserNotificationService";
 import OnCallDutyPolicyUserOverrideService from "./OnCallDutyPolicyUserOverrideService";
+import DiscordInteractionReceiptService from "./DiscordInteractionReceiptService";
 
 import MonitorLogService from "./MonitorLogService";
 import NetworkFlowService from "./NetworkFlowService";
@@ -570,6 +573,7 @@ const services: Array<BaseService> = [
   VMwareVCenterOwnerRuleService,
   VMwareVCenterOwnerTeamService,
   VMwareVCenterOwnerUserService,
+  DiscordResourceThreadService,
   LlmProviderService,
   DataSourceService,
 
@@ -699,6 +703,7 @@ const services: Array<BaseService> = [
   UserWhatsAppService,
   UserTelegramService,
   UserSlackService,
+  UserDiscordService,
   UserMicrosoftTeamsService,
   UserTotpAuthService,
   UserTwoFactorBackupCodeService,
@@ -826,6 +831,7 @@ const services: Array<BaseService> = [
   MonitorTestService,
 
   WorkspaceProjectAuthTokenService,
+  DiscordInteractionReceiptService,
   WorkspaceUserAuthTokenService,
   WorkspaceSettingService,
   WorkspaceNotificationRuleService,

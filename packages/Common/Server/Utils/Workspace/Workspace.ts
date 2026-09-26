@@ -3,6 +3,7 @@ import WorkspaceBase, { WorkspaceSendMessageResponse } from "./WorkspaceBase";
 import SlackWorkspace from "./Slack/Slack";
 import MicrosoftTeamsUtil from "./MicrosoftTeams/MicrosoftTeams";
 import DiscordWorkspace from "./Discord/Discord";
+import DiscordHistory from "./Discord/DiscordHistory";
 import BadDataException from "../../../Types/Exception/BadDataException";
 import ObjectID from "../../../Types/ObjectID";
 import WorkspaceMessagePayload, {
@@ -282,6 +283,8 @@ export default class WorkspaceUtil {
     oldestTimestamp?: Date;
   }): Promise<Array<WorkspaceChannelMessage>> {
     switch (params.workspaceType) {
+      case WorkspaceType.Discord:
+        return await DiscordHistory.getChannelMessages(params);
       case WorkspaceType.Slack: {
         const slackParams: {
           channelId: string;

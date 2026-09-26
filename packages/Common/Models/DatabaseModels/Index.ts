@@ -69,6 +69,7 @@ import CloudResourceOwnerTeam from "./CloudResourceOwnerTeam";
 import CloudResourceOwnerUser from "./CloudResourceOwnerUser";
 import CloudResourceLabelRule from "./CloudResourceLabelRule";
 import CloudResourceOwnerRule from "./CloudResourceOwnerRule";
+import DiscordResourceThread from "./DiscordResourceThread";
 import RumApplication from "./RumApplication";
 import RumApplicationOwnerTeam from "./RumApplicationOwnerTeam";
 import RumApplicationOwnerUser from "./RumApplicationOwnerUser";
@@ -298,6 +299,7 @@ import UserPush from "./UserPush";
 import UserWhatsApp from "./UserWhatsApp";
 import UserTelegram from "./UserTelegram";
 import UserSlack from "./UserSlack";
+import UserDiscord from "./UserDiscord";
 import UserMicrosoftTeams from "./UserMicrosoftTeams";
 import UserWebhook from "./UserWebhook";
 // User Notification Rules
@@ -457,6 +459,7 @@ import WorkspaceProjectAuthToken from "./WorkspaceProjectAuthToken";
 import WorkspaceSetting from "./WorkspaceSetting";
 import WorkspaceNotificationRule from "./WorkspaceNotificationRule";
 import WorkspaceNotificationSummary from "./WorkspaceNotificationSummary";
+import DiscordInteractionReceipt from "./DiscordInteractionReceipt";
 
 import OnCallDutyPolicyUserOverride from "./OnCallDutyPolicyUserOverride";
 import MonitorFeed from "./MonitorFeed";
@@ -485,6 +488,7 @@ const AllModelTypes: Array<{
   User,
   WorkspaceUserAuthToken,
   WorkspaceProjectAuthToken,
+  DiscordInteractionReceipt,
   Probe,
   Project,
   EmailVerificationToken,
@@ -750,6 +754,7 @@ const AllModelTypes: Array<{
   UserWhatsApp,
   UserTelegram,
   UserSlack,
+  UserDiscord,
   UserMicrosoftTeams,
   UserWebhook,
   UserIncomingCallNumber,
@@ -961,6 +966,7 @@ const AllModelTypes: Array<{
   CloudResourceOwnerUser,
   CloudResourceLabelRule,
   CloudResourceOwnerRule,
+  DiscordResourceThread,
   RumApplication,
   RumApplicationOwnerTeam,
   RumApplicationOwnerUser,

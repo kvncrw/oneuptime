@@ -1,5 +1,11 @@
 import { AddAIInvestigationDecision1793700000000 } from "./1793700000000-AddAIInvestigationDecision";
 import { RemoveMonitorDescriptionLengthLimit1793800000000 } from "./1793800000000-RemoveMonitorDescriptionLengthLimit";
+import { AddUserDiscord1795100000000 } from "./1795100000000-AddUserDiscord";
+import { AddUserDiscordUniqueMethod1795100000001 } from "./1795100000001-AddUserDiscordUniqueMethod";
+import { AddDiscordResourceThread1795200000000 } from "./1795200000000-AddDiscordResourceThread";
+import { AddDiscordResourceThreadRetiredThreadIds1795200000001 } from "./1795200000001-AddDiscordResourceThreadRetiredThreadIds";
+import { AddDiscordStatusPageSubscribers1795300000000 } from "./1795300000000-AddDiscordStatusPageSubscribers";
+import { AddDiscordInteractionReceipt1795400000000 } from "./1795400000000-AddDiscordInteractionReceipt";
 import { AddConfigurableRuleCriteria1792500000000 } from "./1792500000000-AddConfigurableRuleCriteria";
 import { AddGoogleSecOpsDiagnostics1792300000000 } from "./1792300000000-AddGoogleSecOpsDiagnostics";
 import { AddIncomingCallPolicyPhoneNumbers1792600000000 } from "./1792600000000-AddIncomingCallPolicyPhoneNumbers";
@@ -1200,4 +1206,10 @@ export default [
   MakeOwnerRowsUnique1793500000000,
   AddAIInvestigationDecision1793700000000,
   RemoveMonitorDescriptionLengthLimit1793800000000,
+  AddUserDiscord1795100000000,
+  AddUserDiscordUniqueMethod1795100000001,
+  AddDiscordResourceThread1795200000000,
+  AddDiscordResourceThreadRetiredThreadIds1795200000001,
+  AddDiscordStatusPageSubscribers1795300000000,
+  AddDiscordInteractionReceipt1795400000000,
 ];
