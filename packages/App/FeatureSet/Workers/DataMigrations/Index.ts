@@ -115,6 +115,8 @@ import RepairHashedStringEnvelopeSecrets from "./RepairHashedStringEnvelopeSecre
 import MoveGoogleSecOpsConnectionsToSecurityEventConnections from "./MoveGoogleSecOpsConnectionsToSecurityEventConnections";
 import BackfillAuditLogRootResource from "./BackfillAuditLogRootResource";
 import RepairGoogleSecOpsDetectionSeverity from "./RepairGoogleSecOpsDetectionSeverity";
+import ScheduleRemindersMissedByReminderRuleLookup from "./ScheduleRemindersMissedByReminderRuleLookup";
+import RepairKubernetesDashboardClusterCpuTile from "./RepairKubernetesDashboardClusterCpuTile";
 
 // This is the order in which the migrations will be run. Add new migrations to the end of the array.
 
@@ -480,6 +482,35 @@ const DataMigrations: Array<DataMigrationBase> = [
    * unreadable values alone, naming them in a log instead.
    */
   new NormalizeMonitoringInterval(),
+  /*
+   * Issue #4030: from 13.0.3 every read of an incident, alert or scheduled
+   * maintenance reminder rule by isEnabled failed in Postgres, so subjects
+   * opened or re-evaluated since then were left with no
+   * nextReminderNotificationAt, and the reminder workers never pick up a
+   * NULL. For each project with an enabled rule, re-matches the rule for its
+   * open subjects that have NO timestamp, as a rule edit would, paging
+   * through all of them. Subjects that already have one keep it (their
+   * overdue reminder goes out on the worker's next tick). Idempotent: a
+   * scheduled subject is no longer NULL. Runs once, so subjects opened by
+   * pre-fix pods while the rollout is still in progress, after the pass has
+   * walked their project, are not covered (the migrate Job runs while pods
+   * roll with migrate.hook: false, pre-upgrade with true); re-saving any
+   * reminder rule of that kind in the project, or editing the subject's
+   * labels or enableReminders (or severity, for incidents and alerts), runs
+   * the same refresh for them.
+   */
+  new ScheduleRemindersMissedByReminderRuleLookup(),
+  /*
+   * The Kubernetes dashboard template's "Cluster CPU (cores in use)" tile
+   * summed the k8s.node.cpu.usage gauge over every node, scrape and bucket,
+   * so it read hundreds of cores on a small cluster once the agent chart
+   * started emitting that metric. The template now ships the busiest node's
+   * peak (Max). Rewrites the tile on dashboards already created from the
+   * template, matching its exact title, metric and Sum only; a tile the user
+   * renamed or re-aggregated is left alone. Compare-and-set per dashboard, so
+   * a concurrent save wins. Idempotent.
+   */
+  new RepairKubernetesDashboardClusterCpuTile(),
 ];
 
 export default DataMigrations;
