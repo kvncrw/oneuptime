@@ -3,7 +3,9 @@
 # The 13.0.8 App lockfile is stale, so its stock Dockerfile cannot reproduce
 # the published release with npm ci. Resolve the committed 13.0.8 manifests in
 # a Debian image, then compile both Common and App before publishing.
-FROM public.ecr.aws/docker/library/node:26-bookworm-slim AS community
+# Docker Hub, not ECR Public: ECR Public answers GitHub runners with 429 "Data
+# limit exceeded". Pinned to the index digest ECR resolved on 2026-09-27.
+FROM docker.io/library/node:26-bookworm-slim@sha256:662933cf47f013bc8e4beb31a6116448427a82057ba7c42c97e4c5ba766504c2 AS community
 
 RUN mkdir -p /var/cache/oneuptime/npm \
     && chmod 2777 /var/cache/oneuptime/npm \
