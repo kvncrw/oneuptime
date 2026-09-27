@@ -122,7 +122,6 @@ export default class LlmProviderAPI extends BaseAPI<
               select: {
                 _id: true,
                 projectId: true,
-                isGlobalLlm: true,
               },
               props: props,
             });
@@ -142,10 +141,26 @@ export default class LlmProviderAPI extends BaseAPI<
            * are managed by platform admins, so only master admins may test them
            * (e.g. from the Admin Dashboard). Project providers are already
            * gated by the access-scoped read above.
+           *
+           * isGlobalLlm is readable by nobody (read: []), so it is looked up as
+           * root after the access check: selecting it with the caller's
+           * permissions answered 422 for every project owner, which made the
+           * "Test connection" button unusable outside the admin dashboard.
            */
+          const globalFlag: LlmProvider | null =
+            await LlmProviderService.findOneById({
+              id: llmProviderId,
+              select: {
+                _id: true,
+                isGlobalLlm: true,
+              },
+              props: {
+                isRoot: true,
+              },
+            });
+
           const isGlobalProvider: boolean =
-            accessibleProvider.isGlobalLlm === true ||
-            !accessibleProvider.projectId;
+            globalFlag?.isGlobalLlm === true || !accessibleProvider.projectId;
 
           if (isGlobalProvider && !props.isMasterAdmin) {
             return Response.sendErrorResponse(
