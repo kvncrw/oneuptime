@@ -28,6 +28,7 @@ import NotAuthorizedException from "../../../Types/Exception/NotAuthorizedExcept
 import ObjectID from "../../../Types/ObjectID";
 import WorkspaceType from "../../../Types/Workspace/WorkspaceType";
 import GitHubInstallationBinding from "../CodeRepository/GitHub/GitHubInstallationBinding";
+import GlobalCache from "../../Infrastructure/GlobalCache";
 import logger from "../Logger";
 import CaptureSpan from "../Telemetry/CaptureSpan";
 import { LLMMessage } from "../LLM/LLMService";
@@ -52,6 +53,9 @@ import GitHubActions, {
  */
 
 const DEFAULT_MUTE_HOURS: number = 24;
+const FILE_ISSUE_LEASE_NAMESPACE: string = "ci-watch-file-issue";
+// Longer than the GitHub create call plus the thread follow-up.
+const FILE_ISSUE_LEASE_SECONDS: number = 120;
 const MAX_MUTE_HOURS: number = 24 * 30;
 const RETIRE_HISTORY_RUNS: number = 30;
 const RETIRE_LOG_LINES: number = 200;
@@ -91,6 +95,67 @@ export default class CiWatchActions {
     eventId: ObjectID,
   ): Promise<CiWatchActionResult> {
     const loaded: LoadedEvent = await CiWatchActions.loadForEdit(
+      scope,
+      eventId,
+    );
+
+    if (loaded.event.issueUrl) {
+      return {
+        reply: `An issue already exists for this alert: ${loaded.event.issueUrl}`,
+      };
+    }
+
+    /*
+     * Two presses (or two people) at once both read "no issue yet". The lease
+     * lets one file; the other is told to wait. With the cache down we file
+     * anyway: a rare duplicate issue beats a button that does nothing.
+     */
+    const leaseToken: string = ObjectID.generate().toString();
+    let leased: boolean = false;
+
+    try {
+      leased = await GlobalCache.setStringIfNotExists(
+        FILE_ISSUE_LEASE_NAMESPACE,
+        eventId.toString(),
+        leaseToken,
+        { expiresInSeconds: FILE_ISSUE_LEASE_SECONDS },
+      );
+
+      if (!leased) {
+        return {
+          reply:
+            "An issue for this alert is being filed right now. Press again in a minute to get its link.",
+        };
+      }
+    } catch (error) {
+      logger.warn(`CI watch: file-issue lease unavailable: ${error}`);
+    }
+
+    try {
+      return await CiWatchActions.fileIssueLeased(scope, eventId);
+    } finally {
+      if (leased) {
+        try {
+          await GlobalCache.deleteKeyIfValue(
+            FILE_ISSUE_LEASE_NAMESPACE,
+            eventId.toString(),
+            leaseToken,
+          );
+        } catch (error) {
+          logger.debug(
+            `CI watch: could not release file-issue lease: ${error}`,
+          );
+        }
+      }
+    }
+  }
+
+  private static async fileIssueLeased(
+    scope: CiWatchActionScope,
+    eventId: ObjectID,
+  ): Promise<CiWatchActionResult> {
+    // Re-read under the lease: the holder before us may have just filed it.
+    const loaded: LoadedEvent = await CiWatchActions.loadForRead(
       scope,
       eventId,
     );
