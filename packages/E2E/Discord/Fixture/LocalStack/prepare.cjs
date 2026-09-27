@@ -155,3 +155,16 @@ for (const name of [
       .replace(/worker_processes\s+auto;/, "worker_processes 2;");
   write("ingress/" + name, text);
 }
+// Dockerfile is gitignored repo-wide, so the ingress recipe lives here.
+write(
+  "ingress/Dockerfile",
+  [
+    "FROM nginx:stable",
+    "COPY nginx.conf /etc/nginx/nginx.conf",
+    "COPY default.conf.template /etc/nginx/templates/default.conf.template",
+    "COPY envsubst-on-templates.sh /etc/nginx/envsubst-on-templates.sh",
+    "COPY start.sh /start.sh",
+    'ENTRYPOINT ["/bin/sh", "/start.sh"]',
+    "",
+  ].join("\n"),
+);
