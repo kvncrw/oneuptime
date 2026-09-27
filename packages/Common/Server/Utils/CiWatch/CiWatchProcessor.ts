@@ -402,10 +402,14 @@ export default class CiWatchProcessor {
       // The model may quote the log; scrub its answer as if it were a log.
       analysisText = CiLogScrubber.scrub(analysis.text);
       event.analysisStatus = analysis.status;
-      event.analysis =
-        analysis.status === CiAnalysisStatus.Done
-          ? analysisText
-          : `No analysis: ${analysisText}`;
+      /*
+       * Only model output is stored as analysis. The skip reason is carried by
+       * analysisStatus and rendered in the Discord message, so it never feeds
+       * back into the next run's history or an issue body as if it were one.
+       */
+      if (analysis.status === CiAnalysisStatus.Done) {
+        event.analysis = analysisText;
+      }
     }
 
     const saved: CiWorkflowEvent = await CiWorkflowEventService.create({
