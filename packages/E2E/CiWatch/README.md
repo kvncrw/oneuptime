@@ -142,9 +142,13 @@ CI_WATCH_RELAY_TOKEN_UNSET=1 bash packages/E2E/CiWatch/Fixture/local-stack.sh st
 LLM_RELAY_E2E_MODE=no-token bash packages/E2E/CiWatch/Fixture/local-stack.sh test --grep RFM02
 bash packages/E2E/CiWatch/Fixture/local-stack.sh start
 
-# RFM12: Redis stopped under a running app
+# RFM12: Redis stopped under a running app. Nothing can be provisioned without
+# Redis (signup takes a Redis mutex, session refresh fails closed), so the prep
+# half saves a signed-in session and a Relay provider first, and the probe half
+# runs within the session JWT's 15 minutes with globalSetup skipped.
+bash packages/E2E/CiWatch/Fixture/local-stack.sh test --grep "RFM12 prep"
 docker stop <project>-valkey-1
-LLM_RELAY_E2E_MODE=redis-down bash packages/E2E/CiWatch/Fixture/local-stack.sh test --grep RFM12
+LLM_RELAY_E2E_MODE=redis-down bash packages/E2E/CiWatch/Fixture/local-stack.sh test --grep "RFM12 Redis"
 docker start <project>-valkey-1
 ```
 

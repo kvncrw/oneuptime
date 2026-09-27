@@ -8,8 +8,14 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./CiWatch",
   testMatch: "**/*.spec.ts",
-  // Burns the first-signup Master Admin seat; see Discord/Fixture/global-setup.ts.
-  globalSetup: "./Discord/Fixture/global-setup.ts",
+  /*
+   * Burns the first-signup Master Admin seat; see Discord/Fixture/global-setup.ts.
+   * Signup takes a Redis mutex, so the redis-down relay run (RFM12) cannot
+   * register anyone; it probes with a session saved by the healthy run.
+   */
+  ...(process.env["LLM_RELAY_E2E_MODE"] === "redis-down"
+    ? {}
+    : { globalSetup: "./Discord/Fixture/global-setup.ts" }),
   fullyParallel: false,
   workers: 1,
   retries: 0,
