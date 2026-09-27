@@ -7,7 +7,10 @@ project=$(e2e_project "$fixture_dir/config.env")
 export BUILDX_CONFIG="$fixture_dir/buildx"
 mkdir -p "$BUILDX_CONFIG"
 target=${1:?Use App or E2E}
-case "$target" in App) image="$project-app:local"; target_args=(--target community);; E2E) image="$project-tests:local"; target_args=();; *) exit 2;; esac
+case "$target" in App) image="$project-app:local";; E2E) image="$project-tests:local";; *) exit 2;; esac
+# 14.x builds the community stage of a multi-stage App Dockerfile; 13.0.8 has one stage.
+target_args=()
+if [[ "$target" = App ]] && grep -qE '^FROM .* AS community' "$fixture_dir/App.Dockerfile"; then target_args=(--target community); fi
 source_sha=$(node -p "require('$fixture_dir/source.json').head")
 source_version=$(node -p "require('$fixture_dir/source.json').appVersion")
 set +e
