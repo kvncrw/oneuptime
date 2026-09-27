@@ -70,7 +70,9 @@ if (!fs.existsSync(secretsFile)) {
     BILLING_ENABLED: "false",
     IS_ENTERPRISE_EDITION: "false",
     ENVIRONMENT: "production",
-    COMPOSE_PROJECT_NAME: "oneuptime-discord-e2e",
+    // E2E_PROJECT isolates one run from another on a shared host: the value
+    // names the compose project, its volumes and its image tags.
+    COMPOSE_PROJECT_NAME: process.env.E2E_PROJECT || "oneuptime-discord-e2e",
     DATABASE_HOST: "postgres",
     DATABASE_PORT: "5432",
     DATABASE_NAME: "discord_e2e",

@@ -17,7 +17,7 @@ services:
     restart: "no"
   app:
     extends: {file: base.yml, service: app}
-    image: oneuptime-discord-e2e-app:local
+    image: ${COMPOSE_PROJECT_NAME}-app:local
     pull_policy: never
     restart: "no"
     depends_on:
@@ -25,7 +25,7 @@ services:
       valkey: {condition: service_healthy}
       clickhouse: {condition: service_healthy}
   ingress:
-    image: oneuptime-discord-e2e-ingress:local
+    image: ${COMPOSE_PROJECT_NAME}-ingress:local
     pull_policy: never
     depends_on: [app]
     environment:
@@ -43,7 +43,7 @@ services:
       oneuptime:
         aliases: [oneuptime.test]
   e2e:
-    image: oneuptime-discord-e2e-tests:local
+    image: ${COMPOSE_PROJECT_NAME}-tests:local
     pull_policy: never
     networks: [oneuptime]
     environment:

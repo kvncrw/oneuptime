@@ -3,27 +3,31 @@ const fs = require("fs"),
   crypto = require("crypto");
 const root = process.cwd(),
   scratch = root + "/.scratch/discord-e2e";
+const project = (fs
+  .readFileSync(scratch + "/config.env", "utf8")
+  .match(/^COMPOSE_PROJECT_NAME=(.+)$/m) || [])[1];
+if (!project) throw new Error("config.env has no COMPOSE_PROJECT_NAME");
 const run = (args, input) =>
   cp.execFileSync("docker", args, {
     input,
     stdio: input ? ["pipe", "pipe", "inherit"] : ["ignore", "pipe", "inherit"],
   });
 for (const volume of ["fixture-private", "fixture-trust"])
-  run(["volume", "create", "oneuptime-discord-e2e_" + volume]);
+  run(["volume", "create", project + "_" + volume]);
 run([
   "run",
   "--rm",
   "--network",
   "none",
   "-v",
-  "oneuptime-discord-e2e_fixture-private:/fixture-private",
+  project + "_fixture-private:/fixture-private",
   "-v",
-  "oneuptime-discord-e2e_fixture-trust:/fixture-trust",
+  project + "_fixture-trust:/fixture-trust",
   "-v",
   root + "/packages/E2E/Discord/Fixture:/fixture:ro",
   "--entrypoint",
   "bash",
-  "oneuptime-discord-e2e-tests:local",
+  project + "-tests:local",
   "/fixture/prepare-certificates.sh",
 ]);
 const pub = run([
@@ -32,10 +36,10 @@ const pub = run([
   "--network",
   "none",
   "-v",
-  "oneuptime-discord-e2e_fixture-private:/fixture-private:ro",
+  project + "_fixture-private:/fixture-private:ro",
   "--entrypoint",
   "cat",
-  "oneuptime-discord-e2e-tests:local",
+  project + "-tests:local",
   "/fixture-private/interaction-public.der",
 ])
   .subarray(-32)

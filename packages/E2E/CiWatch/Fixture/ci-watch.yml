@@ -13,7 +13,7 @@ services:
       GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY}
       GITHUB_APP_WEBHOOK_SECRET: ${GITHUB_APP_WEBHOOK_SECRET}
   github-fixture:
-    image: oneuptime-discord-e2e-tests:local
+    image: ${COMPOSE_PROJECT_NAME}-tests:local
     pull_policy: never
     entrypoint: [node, /fixture/github-server.cjs]
     environment:
@@ -27,7 +27,7 @@ services:
       oneuptime:
         aliases: [api.github.com, github.com, github-fixture]
   llm-fixture:
-    image: oneuptime-discord-e2e-tests:local
+    image: ${COMPOSE_PROJECT_NAME}-tests:local
     pull_policy: never
     entrypoint: [node, /fixture/llm-server.cjs]
     environment:
