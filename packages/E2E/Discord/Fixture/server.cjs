@@ -230,6 +230,59 @@ const server = https.createServer(
       }
 
       const route = pathname.replace(/^\/api(?:\/v10)?/, "");
+      // Discord authenticates interaction webhooks by the token in the path,
+      // not an Authorization header, so these routes sit above the auth gate.
+      // Interaction followups use the interaction token as the resource id.
+      const followupRoute = route.match(
+        /^\/webhooks\/(\d+)\/([A-Za-z0-9_.-]+)$/,
+      );
+      if (req.method === "POST" && followupRoute) {
+        let body;
+        try {
+          body = JSON.parse(await readBody(req));
+        } catch {
+          return send(res, 400, { message: "Malformed followup body" });
+        }
+        postedMessages.push({
+          id: `3000000000000${String(++messageCounter).padStart(4, "0")}`,
+          channel_id: ids.channelId,
+          content: body.content || "",
+          embeds: body.embeds || [],
+          components: body.components || [],
+          interaction_token: followupRoute[2],
+          webhook_kind: "interaction",
+          timestamp: new Date().toISOString(),
+        });
+        return send(res, 200, { message: "Fixture followup accepted" });
+      }
+      // The deferred-interaction terminal response: the app edits the
+      // original (type 5) acknowledgement in place. Recorded like a followup
+      // so specs can wait for the outcome by interaction token.
+      const originalRoute = route.match(
+        /^\/webhooks\/(\d+)\/([A-Za-z0-9_.-]+)\/messages\/@original$/,
+      );
+      if (req.method === "PATCH" && originalRoute) {
+        let body;
+        try {
+          body = JSON.parse(await readBody(req));
+        } catch {
+          return send(res, 400, { message: "Malformed original edit body" });
+        }
+        const edited = {
+          id: `3000000000000${String(++messageCounter).padStart(4, "0")}`,
+          channel_id: ids.channelId,
+          content: body.content || "",
+          embeds: body.embeds || [],
+          components: body.components || [],
+          flags: body.flags,
+          interaction_token: originalRoute[2],
+          webhook_kind: "interaction",
+          edited_original: true,
+          timestamp: new Date().toISOString(),
+        };
+        postedMessages.push(edited);
+        return send(res, 200, edited);
+      }
       if (req.method === "POST" && route === "/oauth2/token") {
         const form = new URLSearchParams(await readBody(req));
         const grant = codes.get(form.get("code"));
@@ -444,9 +497,7 @@ const server = https.createServer(
       // message content, then model a successful Discord message response.
       const messageRoute = route.match(/^\/channels\/(\d+)\/messages$/);
       if (req.method === "POST" && bot && messageRoute) {
-        const channel = channels().find(
-          (item) => item.id === messageRoute[1],
-        );
+        const channel = channels().find((item) => item.id === messageRoute[1]);
         if (!channel)
           return send(res, 404, { message: "Unknown Channel", code: 10003 });
         let body;
@@ -479,9 +530,7 @@ const server = https.createServer(
       // configured parent channel via POST /channels/{parent}/threads.
       const threadRoute = route.match(/^\/channels\/(\d+)\/threads$/);
       if (req.method === "POST" && bot && threadRoute) {
-        const parent = channels().find(
-          (item) => item.id === threadRoute[1],
-        );
+        const parent = channels().find((item) => item.id === threadRoute[1]);
         if (!parent)
           return send(res, 404, { message: "Unknown Channel", code: 10003 });
         if (parent.type !== 0)
@@ -500,61 +549,12 @@ const server = https.createServer(
           type: body.type === 12 ? 12 : 11,
           name: body.name || "",
           parent_id: parent.id,
+          // Discord makes the creator the owner; thread verification checks it.
+          owner_id: ids.botId,
           permission_overwrites: [],
         };
         createdThreads.push(thread);
         return send(res, 200, thread);
-      }
-      // Interaction followups use the interaction token as the resource id.
-      const followupRoute = route.match(
-        /^\/webhooks\/(\d+)\/([A-Za-z0-9_.-]+)$/,
-      );
-      if (req.method === "POST" && followupRoute) {
-        let body;
-        try {
-          body = JSON.parse(await readBody(req));
-        } catch {
-          return send(res, 400, { message: "Malformed followup body" });
-        }
-        postedMessages.push({
-          id: `3000000000000${String(++messageCounter).padStart(4, "0")}`,
-          channel_id: ids.channelId,
-          content: body.content || "",
-          embeds: body.embeds || [],
-          components: body.components || [],
-          interaction_token: followupRoute[2],
-          webhook_kind: "interaction",
-          timestamp: new Date().toISOString(),
-        });
-        return send(res, 200, { message: "Fixture followup accepted" });
-      }
-      // The deferred-interaction terminal response: the app edits the
-      // original (type 5) acknowledgement in place. Recorded like a followup
-      // so specs can wait for the outcome by interaction token.
-      const originalRoute = route.match(
-        /^\/webhooks\/(\d+)\/([A-Za-z0-9_.-]+)\/messages\/@original$/,
-      );
-      if (req.method === "PATCH" && originalRoute) {
-        let body;
-        try {
-          body = JSON.parse(await readBody(req));
-        } catch {
-          return send(res, 400, { message: "Malformed original edit body" });
-        }
-        const edited = {
-          id: `3000000000000${String(++messageCounter).padStart(4, "0")}`,
-          channel_id: ids.channelId,
-          content: body.content || "",
-          embeds: body.embeds || [],
-          components: body.components || [],
-          flags: body.flags,
-          interaction_token: originalRoute[2],
-          webhook_kind: "interaction",
-          edited_original: true,
-          timestamp: new Date().toISOString(),
-        };
-        postedMessages.push(edited);
-        return send(res, 200, edited);
       }
       unhandled.push(`${req.method} ${pathname}`);
       return send(res, 404, { message: "Unmodeled Discord fixture request" });

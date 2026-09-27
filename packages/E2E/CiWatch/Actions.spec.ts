@@ -275,8 +275,9 @@ test("FM16 a button pressed by a linked member without EditCiWatch is refused", 
     await discordFixture.scenario("second-user");
     await linkDiscordUser(readerPage, project.projectId);
     await discordFixture.scenario("valid");
+    // WorkspaceUserAuthToken is readable by its own user only (CurrentUser).
     const links: Array<JSONish> = await listItems({
-      page: project.page,
+      page: readerPage,
       projectId: project.projectId,
       path: "/api/workspace-user-auth-token",
       query: {
