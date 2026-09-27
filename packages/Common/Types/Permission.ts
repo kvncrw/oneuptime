@@ -243,6 +243,10 @@ enum Permission {
   EditProjectLlmModelPrice = "EditProjectLlmModelPrice",
   ReadProjectLlmModelPrice = "ReadProjectLlmModelPrice",
 
+  // CI Watch (GitHub Actions workflow watch: config, workflows, events)
+  ReadCiWatch = "ReadCiWatch",
+  EditCiWatch = "EditCiWatch",
+
   // Metric Recording Rules (derived metrics)
   CreateProjectMetricRecordingRule = "CreateProjectMetricRecordingRule",
   DeleteProjectMetricRecordingRule = "DeleteProjectMetricRecordingRule",
@@ -7950,6 +7954,28 @@ export class PermissionHelper {
         isAccessControlPermission: false,
         isRolePermission: false,
         group: PermissionGroup.Telemetry,
+      },
+
+      // CI Watch Permissions
+      {
+        permission: Permission.ReadCiWatch,
+        title: "Read CI Watch",
+        description:
+          "This permission can read the CI watch configuration, watched workflows and their alerts in this project.",
+        isAssignableToTenant: true,
+        isAccessControlPermission: false,
+        isRolePermission: false,
+        group: PermissionGroup.AIAgent,
+      },
+      {
+        permission: Permission.EditCiWatch,
+        title: "Edit CI Watch",
+        description:
+          "This permission can configure the CI watch, mark workflows known-red or muted, and file issues from CI alerts in this project.",
+        isAssignableToTenant: true,
+        isAccessControlPermission: false,
+        isRolePermission: false,
+        group: PermissionGroup.AIAgent,
       },
 
       // Metric Recording Rule Permissions (derived metrics)

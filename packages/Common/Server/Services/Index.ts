@@ -382,6 +382,9 @@ import ServiceLevelObjectiveService from "./ServiceLevelObjectiveService";
 import ServiceLevelObjectiveBurnRateRuleService from "./ServiceLevelObjectiveBurnRateRuleService";
 import LlmCostBudgetService from "./LlmCostBudgetService";
 import LlmModelPriceService from "./LlmModelPriceService";
+import CiWatchConfigService from "./CiWatchConfigService";
+import CiWorkflowService from "./CiWorkflowService";
+import CiWorkflowEventService from "./CiWorkflowEventService";
 import ServiceLevelObjectiveOwnerUserService from "./ServiceLevelObjectiveOwnerUserService";
 import ServiceLevelObjectiveOwnerTeamService from "./ServiceLevelObjectiveOwnerTeamService";
 import ServiceLevelObjectiveMonitorRuleService from "./ServiceLevelObjectiveMonitorRuleService";
@@ -819,6 +822,9 @@ const services: Array<BaseService> = [
   ServiceLevelObjectiveBurnRateRuleService,
   LlmCostBudgetService,
   LlmModelPriceService,
+  CiWatchConfigService,
+  CiWorkflowService,
+  CiWorkflowEventService,
   ServiceLevelObjectiveOwnerUserService,
   ServiceLevelObjectiveOwnerTeamService,
   ServiceLevelObjectiveMonitorRuleService,

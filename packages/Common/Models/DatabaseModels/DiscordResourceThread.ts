@@ -30,6 +30,8 @@ export enum DiscordResourceType {
   Monitor = "monitor",
   IncidentEpisode = "incidentEpisode",
   AlertEpisode = "alertEpisode",
+  // CI watch: one thread per watched GitHub Actions workflow (CiWorkflow row).
+  CiWorkflow = "ciWorkflow",
 }
 
 /*
@@ -81,6 +83,15 @@ const readPermissions: Array<Permission> = [
 })
 @Index(["projectId", "resourceType", "resourceId", "notificationRuleId"], {
   unique: true,
+})
+/*
+ * Postgres treats NULLs as distinct, so the index above cannot fence a claim
+ * made without a notification rule. CI watch threads have no rule; this
+ * partial index is their claim.
+ */
+@Index(["projectId", "resourceType", "resourceId"], {
+  unique: true,
+  where: '"notificationRuleId" IS NULL',
 })
 // One thread belongs to one record; the service checks this too (F18).
 @Index(["projectId", "threadId"], {

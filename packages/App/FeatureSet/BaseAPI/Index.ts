@@ -488,6 +488,15 @@ import ServiceLevelObjectiveBurnRateRuleService, {
 import LlmCostBudgetService, {
   Service as LlmCostBudgetServiceType,
 } from "Common/Server/Services/LlmCostBudgetService";
+import CiWatchConfigService, {
+  Service as CiWatchConfigServiceType,
+} from "Common/Server/Services/CiWatchConfigService";
+import CiWorkflowService, {
+  Service as CiWorkflowServiceType,
+} from "Common/Server/Services/CiWorkflowService";
+import CiWorkflowEventService, {
+  Service as CiWorkflowEventServiceType,
+} from "Common/Server/Services/CiWorkflowEventService";
 import LlmModelPriceService, {
   Service as LlmModelPriceServiceType,
 } from "Common/Server/Services/LlmModelPriceService";
@@ -1236,6 +1245,9 @@ import ServiceLevelObjective from "Common/Models/DatabaseModels/ServiceLevelObje
 import ServiceLevelObjectiveBurnRateRule from "Common/Models/DatabaseModels/ServiceLevelObjectiveBurnRateRule";
 import LlmCostBudget from "Common/Models/DatabaseModels/LlmCostBudget";
 import LlmModelPrice from "Common/Models/DatabaseModels/LlmModelPrice";
+import CiWatchConfig from "Common/Models/DatabaseModels/CiWatchConfig";
+import CiWorkflow from "Common/Models/DatabaseModels/CiWorkflow";
+import CiWorkflowEvent from "Common/Models/DatabaseModels/CiWorkflowEvent";
 import ServiceLevelObjectiveOwnerUser from "Common/Models/DatabaseModels/ServiceLevelObjectiveOwnerUser";
 import ServiceLevelObjectiveOwnerTeam from "Common/Models/DatabaseModels/ServiceLevelObjectiveOwnerTeam";
 import ServiceLevelObjectiveMonitorRule from "Common/Models/DatabaseModels/ServiceLevelObjectiveMonitorRule";
@@ -3021,6 +3033,31 @@ const BaseAPIFeatureSet: FeatureSet = {
       new BaseAPI<LlmCostBudget, LlmCostBudgetServiceType>(
         LlmCostBudget,
         LlmCostBudgetService,
+      ).getRouter(),
+    );
+
+    // CI Watch
+    app.use(
+      `/${APP_NAME.toLocaleLowerCase()}`,
+      new BaseAPI<CiWatchConfig, CiWatchConfigServiceType>(
+        CiWatchConfig,
+        CiWatchConfigService,
+      ).getRouter(),
+    );
+
+    app.use(
+      `/${APP_NAME.toLocaleLowerCase()}`,
+      new BaseAPI<CiWorkflow, CiWorkflowServiceType>(
+        CiWorkflow,
+        CiWorkflowService,
+      ).getRouter(),
+    );
+
+    app.use(
+      `/${APP_NAME.toLocaleLowerCase()}`,
+      new BaseAPI<CiWorkflowEvent, CiWorkflowEventServiceType>(
+        CiWorkflowEvent,
+        CiWorkflowEventService,
       ).getRouter(),
     );
 

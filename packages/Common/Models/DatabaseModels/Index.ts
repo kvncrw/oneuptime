@@ -133,6 +133,9 @@ import LogScrubRule from "./LogScrubRule";
 import MetricPipelineRule from "./MetricPipelineRule";
 import LlmCostBudget from "./LlmCostBudget";
 import LlmModelPrice from "./LlmModelPrice";
+import CiWatchConfig from "./CiWatchConfig";
+import CiWorkflow from "./CiWorkflow";
+import CiWorkflowEvent from "./CiWorkflowEvent";
 import MetricRecordingRule from "./MetricRecordingRule";
 import TracePipeline from "./TracePipeline";
 import TracePipelineProcessor from "./TracePipelineProcessor";
@@ -514,6 +517,9 @@ const AllModelTypes: Array<{
   MetricPipelineRule,
   LlmCostBudget,
   LlmModelPrice,
+  CiWatchConfig,
+  CiWorkflow,
+  CiWorkflowEvent,
   MetricRecordingRule,
   TracePipeline,
   TracePipelineProcessor,
