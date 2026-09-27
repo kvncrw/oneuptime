@@ -678,6 +678,10 @@ const DocsNav: NavGroup[] = [
         url: "/docs/integrations/github",
       },
       {
+        title: "CI Watch",
+        url: "/docs/integrations/ci-watch",
+      },
+      {
         title: "GitLab",
         url: "/docs/integrations/gitlab",
       },

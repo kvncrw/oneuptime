@@ -81,7 +81,7 @@ OneUptime uses two sets of events, and they do different jobs.
 
 If none of these are subscribed, the GitHub App still connects repositories and still opens fix pull requests from OneUptime — it simply never responds to anything written in GitHub. That is the most common cause of "the bot ignores me". See [Working with OneUptime from GitHub](/docs/ai/github-app) for what the commands are and who is allowed to issue them.
 
-Other events (**Push**, **Workflow run**) are acknowledged and ignored; subscribing to them does not enable notifications or CI/CD automation.
+**Workflow run** feeds [CI Watch](/docs/integrations/ci-watch), which alerts in Discord when a GitHub Actions workflow starts failing or recovers. It also needs **Actions: Read**. **Push** is acknowledged and ignored.
 
 ### Step 4: Set Installation Access
 
