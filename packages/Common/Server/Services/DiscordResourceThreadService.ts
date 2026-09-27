@@ -805,7 +805,7 @@ export class Service extends DatabaseService<Model> {
           );
           return null;
         }
-        if (!this.belongs(remote, live)) {
+        if (!this.belongs(remote, this.expectedParent(fresh, live))) {
           await settle(
             DiscordResourceThreadState.Stale,
             "thread is outside the current guild or parent, or not owned by the bot",
@@ -1352,6 +1352,23 @@ export class Service extends DatabaseService<Model> {
       method: HTTPMethod.GET,
       path: "/channels/" + DiscordClient.snowflake(threadId),
     })) as JSONObject;
+  }
+
+  /*
+   * Rule-driven rows live under the installation's incident parent, so
+   * moving that parent fences their threads. A CI workflow row names its own
+   * parent (CiWatchConfig), stamped on the row at claim time; verifying it
+   * against the incident parent marked every reused CI thread stale and
+   * silently dropped the workflow's second alert.
+   */
+  private expectedParent(row: Model, installation: Installation): Installation {
+    if (
+      row.resourceType === DiscordResourceType.CiWorkflow &&
+      row.parentChannelId
+    ) {
+      return { ...installation, parentId: row.parentChannelId };
+    }
+    return installation;
   }
 
   private belongs(remote: JSONObject, installation: Installation): boolean {
