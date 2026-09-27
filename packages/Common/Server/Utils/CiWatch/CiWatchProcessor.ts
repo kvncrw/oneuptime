@@ -224,7 +224,12 @@ export default class CiWatchProcessor {
         },
         props: { isRoot: true },
       });
-      workflow = { ...workflow, ...decision.patch } as CiWorkflow;
+      /*
+       * Mutate the entity in place. Spreading it into a plain object drops
+       * the prototype, and with it the `id` getter, so the event row would
+       * be written without ciWorkflowId and the thread lookup would bail.
+       */
+      Object.assign(workflow, decision.patch);
       // null in the patch means "no signature"; the in-memory row mirrors the DB.
       workflow.lastFailureSignature = decision.patch
         .lastFailureSignature as string;
