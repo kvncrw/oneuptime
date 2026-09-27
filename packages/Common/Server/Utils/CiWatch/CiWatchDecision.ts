@@ -26,6 +26,8 @@ const IGNORED_CONCLUSIONS: ReadonlySet<string> = new Set<string>([
   "stale",
 ]);
 
+const RUN_ID_PATTERN: RegExp = /^\d+$/;
+
 export interface CiRunObservation {
   runId: string;
   runUrl: string;
@@ -82,7 +84,11 @@ export default class CiWatchDecisionTable {
     runId: string,
     lastRunId: string | undefined,
   ): boolean {
-    if (!lastRunId || !(/^\d+$/).test(runId) || !(/^\d+$/).test(lastRunId)) {
+    if (
+      !lastRunId ||
+      !RUN_ID_PATTERN.test(runId) ||
+      !RUN_ID_PATTERN.test(lastRunId)
+    ) {
       return false;
     }
     return BigInt(runId) < BigInt(lastRunId);
