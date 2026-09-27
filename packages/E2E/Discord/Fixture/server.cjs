@@ -30,6 +30,10 @@ let threadCounter = 0;
 // CI watch (FM14): how many bot message posts the fixture has already failed
 // under the message-post-fails-once scenario. Reset with the scenario.
 let failedMessagePosts = 0;
+// Guild slash commands the app registers at install (13.0.8 upserts them
+// through GET then POST/PATCH). Ported from the parity fixture.
+let guildCommands = [];
+let commandCounter = 0;
 const snapshot = () => ({
   scenario,
   events,
@@ -132,6 +136,8 @@ const server = https.createServer(
           createdThreads = [];
           threadCounter = 0;
           failedMessagePosts = 0;
+          guildCommands = [];
+          commandCounter = 0;
           return send(res, 200, snapshot());
         }
         if (pathname === "/__fixture/scenario" && req.method === "POST") {
@@ -285,6 +291,61 @@ const server = https.createServer(
           name: "OneUptime E2E",
           bot: { id: ids.botId, username: "oneuptime-e2e-bot", bot: true },
         });
+      const commandRoute = route.match(
+        /^\/applications\/(\d+)\/guilds\/(\d+)\/commands(?:\/(\d+))?$/,
+      );
+      if (bot && commandRoute) {
+        if (
+          commandRoute[1] !== ids.applicationId ||
+          commandRoute[2] !== ids.guildId
+        )
+          return send(res, 404, { message: "Unknown Application or Guild" });
+        const command = guildCommands.find(
+          (item) => item.id === commandRoute[3],
+        );
+        if (commandRoute[3] && !command)
+          return send(res, 404, {
+            message: "Unknown Application Command",
+            code: 10063,
+          });
+        if (req.method === "GET")
+          return send(res, 200, command || guildCommands);
+        if (req.method === "DELETE" && command) {
+          guildCommands = guildCommands.filter((item) => item !== command);
+          return send(res, 204, null);
+        }
+        if (
+          (req.method === "POST" && !commandRoute[3]) ||
+          (req.method === "PATCH" && command)
+        ) {
+          const body = JSON.parse(await readBody(req));
+          if (
+            req.method === "POST" &&
+            (typeof body.name !== "string" || !body.name)
+          )
+            return send(res, 400, { message: "Command name required" });
+          const existing =
+            command ||
+            guildCommands.find(
+              (item) =>
+                item.name === body.name && item.type === (body.type || 1),
+            );
+          const result = {
+            ...(existing || {}),
+            ...body,
+            id:
+              existing?.id ||
+              `7000000000000${String(++commandCounter).padStart(4, "0")}`,
+            application_id: ids.applicationId,
+            guild_id: ids.guildId,
+            type: body.type || existing?.type || 1,
+          };
+          if (existing)
+            guildCommands = guildCommands.filter((item) => item !== existing);
+          guildCommands.push(result);
+          return send(res, 200, result);
+        }
+      }
       if (req.method === "GET" && grant && route === "/users/@me/guilds") {
         if (activeScenario === "user-not-in-guild") return send(res, 200, []);
         return send(res, 200, [
