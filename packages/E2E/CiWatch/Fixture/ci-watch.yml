@@ -12,6 +12,7 @@ services:
       GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET}
       GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY}
       GITHUB_APP_WEBHOOK_SECRET: ${GITHUB_APP_WEBHOOK_SECRET}
+      LLM_RELAY_TOKEN: ${LLM_RELAY_TOKEN}
   github-fixture:
     image: ${COMPOSE_PROJECT_NAME}-tests:local
     pull_policy: never
@@ -37,9 +38,28 @@ services:
     networks:
       oneuptime:
         aliases: [llm-fixture]
+  # Models the relay worker beside the LLM gateway: claims from the app,
+  # forwards to llm-fixture, posts the answer back. Paused by the specs
+  # that claim by hand.
+  llm-relay-worker:
+    image: ${COMPOSE_PROJECT_NAME}-tests:local
+    pull_policy: never
+    entrypoint: [node, /fixture/llm-relay-worker.cjs]
+    environment:
+      CI_WATCH_FIXTURE_CONTROL_TOKEN: ${CI_WATCH_FIXTURE_CONTROL_TOKEN}
+      LLM_RELAY_TOKEN: ${LLM_RELAY_TOKEN}
+      LLM_RELAY_APP_URL: http://oneuptime.test:7849
+      LLM_RELAY_UPSTREAM_URL: http://llm-fixture:8089/v1/chat/completions
+    volumes:
+      - ../../packages/E2E/CiWatch/Fixture:/fixture:ro
+    networks:
+      oneuptime:
+        aliases: [llm-relay-worker]
   e2e:
     environment:
       CI_WATCH_FIXTURE_CONTROL_TOKEN: ${CI_WATCH_FIXTURE_CONTROL_TOKEN}
+      LLM_RELAY_TOKEN: ${LLM_RELAY_TOKEN}
+      LLM_RELAY_E2E_MODE: ${LLM_RELAY_E2E_MODE:-}
       GITHUB_APP_WEBHOOK_SECRET: ${GITHUB_APP_WEBHOOK_SECRET}
       GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID}
       GITHUB_APP_NAME: ${GITHUB_APP_NAME}

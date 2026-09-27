@@ -1174,6 +1174,15 @@ export const GitHubAppPrivateKey: string | null = decodePrivateKey(
 export const GitHubAppWebhookSecret: string | null =
   process.env["GITHUB_APP_WEBHOOK_SECRET"] || null;
 
+/*
+ * LLM relay (LlmType.Relay). Shared secret the relay worker presents in the
+ * x-llm-relay-token header on /api/llm-relay/claim and /result/:id. Unset
+ * means the relay is off: those routes answer 404 and a Relay provider fails
+ * fast instead of waiting for a worker that can never authenticate.
+ */
+export const LlmRelayToken: string | null =
+  process.env["LLM_RELAY_TOKEN"] || null;
+
 // VAPID Configuration for Web Push Notifications
 export const VapidPublicKey: string | undefined =
   process.env["VAPID_PUBLIC_KEY"] || undefined;

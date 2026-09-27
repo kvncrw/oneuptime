@@ -12,11 +12,12 @@ The suite runs the real app, browser, API routes, PostgreSQL and Redis. Three
 external services are replaced by disposable fixtures on the isolated Docker
 network the Discord suite already uses:
 
-| Host the app calls | Fixture | Programmable through |
-|---|---|---|
-| `https://discord.com` | `../Discord/Fixture/server.cjs` | `/__fixture/scenario`, `/__fixture/state` |
-| `https://api.github.com`, `https://github.com` | `Fixture/github-server.cjs` | `/__fixture/program`, `/__fixture/reset`, `/__fixture/state` |
-| `http://llm-fixture:8089/v1` (OpenAI-compatible) | `Fixture/llm-server.cjs` | `/__fixture/program`, `/__fixture/reset`, `/__fixture/state` |
+| Host the app calls                               | Fixture                                                          | Programmable through                                         |
+| ------------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------ |
+| `https://discord.com`                            | `../Discord/Fixture/server.cjs`                                  | `/__fixture/scenario`, `/__fixture/state`                    |
+| `https://api.github.com`, `https://github.com`   | `Fixture/github-server.cjs`                                      | `/__fixture/program`, `/__fixture/reset`, `/__fixture/state` |
+| `http://llm-fixture:8089/v1` (OpenAI-compatible) | `Fixture/llm-server.cjs`                                         | `/__fixture/program`, `/__fixture/reset`, `/__fixture/state` |
+| (the app's relay worker; it calls the app)       | `Fixture/llm-relay-worker.cjs` at `http://llm-relay-worker:8090` | `/__fixture/program`, `/__fixture/reset`, `/__fixture/state` |
 
 Both HTTPS fixtures share the Discord fixture's disposable CA and server
 certificate; `prepare-certificates.sh` adds `api.github.com`, `github.com` and
@@ -47,16 +48,17 @@ bash packages/E2E/CiWatch/Fixture/local-stack.sh test
 
 `prepare` generates the GitHub App settings (`GITHUB_APP_ID`, `GITHUB_APP_NAME`,
 `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY`
-as base64 PEM of a throwaway RSA-2048 key, `GITHUB_APP_WEBHOOK_SECRET`) and the
-fixture control token into `.scratch/discord-e2e/config.env` (ignored, mode
-600), copies `ci-watch.yml` beside the Discord compose files, and re-runs the
+as base64 PEM of a throwaway RSA-2048 key, `GITHUB_APP_WEBHOOK_SECRET`), the
+fixture control token and the relay token (`LLM_RELAY_TOKEN`) into
+`.scratch/discord-e2e/config.env` (ignored, mode 600), copies `ci-watch.yml`
+and `no-relay-token.yml` beside the Discord compose files, and re-runs the
 Discord launcher's isolation check on the merged configuration. Public
 identifiers live in `Fixture/identities.json`. Nothing secret is committed or
 printed.
 
-`start` brings up `app`, `ingress`, `discord-fixture`, `github-fixture` and
-`llm-fixture`; it re-creates the app container so it receives the GitHub App
-environment.
+`start` brings up `app`, `ingress`, `discord-fixture`, `github-fixture`,
+`llm-fixture` and `llm-relay-worker`; it re-creates the app container so it
+receives the GitHub App environment and `LLM_RELAY_TOKEN`.
 
 `test` accepts Playwright arguments, for example one failure mode:
 
@@ -106,15 +108,52 @@ outbound request count on the fixtures.
 
 ## Failure mode map
 
-| FM | Spec |
-|---|---|
-| 1 to 5 | `Intake.spec.ts` |
-| 6 to 9 (plus flaky and mute rows) | `Decision.spec.ts` |
-| 10, 11 | `Reconcile.spec.ts` |
-| 12, 13, 22 | `Analysis.spec.ts` |
-| 14, 21 | `Delivery.spec.ts` |
-| 15 to 18 | `Actions.spec.ts` |
-| 19, 20 | `Astra.spec.ts` |
+| FM                                | Spec                                                         |
+| --------------------------------- | ------------------------------------------------------------ |
+| 1 to 5                            | `Intake.spec.ts`                                             |
+| 6 to 9 (plus flaky and mute rows) | `Decision.spec.ts`                                           |
+| 10, 11                            | `Reconcile.spec.ts`                                          |
+| 12, 13, 22                        | `Analysis.spec.ts`                                           |
+| 14, 21                            | `Delivery.spec.ts`                                           |
+| 15 to 18                          | `Actions.spec.ts`                                            |
+| 19, 20                            | `Astra.spec.ts`                                              |
+| Relay RFM01, RFM03 to RFM11       | `Relay.spec.ts`                                              |
+| Relay RFM02, RFM12                | `RelayStack.spec.ts` (needs a reconfigured stack, see below) |
+
+## LLM relay
+
+`~/.buzz/PLANS/ONEUPTIME_LLM_RELAY.md` adds `LlmType.Relay`: the built
+OpenAI chat-completions body goes onto Redis (`llm-relay:pending`) and the
+caller blocks on `llm-relay:result:<id>`; a worker claims with
+`POST /api/llm-relay/claim` (`{waitSeconds <= 25}`, 204 when empty) and answers
+with `POST /api/llm-relay/result/:id` (`{status, json}`), both under the
+`x-llm-relay-token` header. The relay specs register a `Relay` provider
+(model `fixture-model`, no base URL, no API key) and drive it through
+`/astra`, alert analysis and the provider "test connection" route. The worker
+fixture is paused (`relayWorker.program({enabled: false})`) wherever a spec
+claims by hand; the pause returns only once no claim is in flight.
+
+Two failure modes reconfigure the stack, so they are skipped in a normal run
+and executed on their own:
+
+```bash
+# RFM02: app without LLM_RELAY_TOKEN
+CI_WATCH_RELAY_TOKEN_UNSET=1 bash packages/E2E/CiWatch/Fixture/local-stack.sh start
+LLM_RELAY_E2E_MODE=no-token bash packages/E2E/CiWatch/Fixture/local-stack.sh test --grep RFM02
+bash packages/E2E/CiWatch/Fixture/local-stack.sh start
+
+# RFM12: Redis stopped under a running app
+docker stop <project>-valkey-1
+LLM_RELAY_E2E_MODE=redis-down bash packages/E2E/CiWatch/Fixture/local-stack.sh test --grep RFM12
+docker start <project>-valkey-1
+```
+
+Relay contract points the suite pins beyond the plan: a malformed result id is
+refused with 400 (a well-formed unknown id is accepted with 200); `waitSeconds`
+above 25 is clamped, not rejected; Relay providers require a model name; the
+relay makes one attempt per request-adaptation step (no HTTP retry ladder).
+RFM12 uses the provider test route only, because Discord interactions answer
+503 while their rate limiter has no Redis.
 
 ## Contract points the server must meet
 

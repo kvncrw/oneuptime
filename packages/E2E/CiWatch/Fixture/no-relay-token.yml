@@ -1,0 +1,7 @@
+# Overlay for RFM02: the app runs with LLM_RELAY_TOKEN unset, so the relay
+# routes must answer 404 and a Relay provider must fail fast. Applied by
+# `CI_WATCH_RELAY_TOKEN_UNSET=1 bash packages/E2E/CiWatch/Fixture/local-stack.sh start`.
+services:
+  app:
+    environment:
+      LLM_RELAY_TOKEN: ""

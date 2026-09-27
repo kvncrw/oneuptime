@@ -10,6 +10,7 @@ import BadDataException from "../../../Types/Exception/BadDataException";
 import logger, { LogAttributes } from "../Logger";
 import CaptureSpan from "../Telemetry/CaptureSpan";
 import DataSourceEgressGuard from "../DataSource/EgressGuard";
+import LlmRelay, { LlmRelayResult } from "./LlmRelay";
 
 export interface LLMToolDefinition {
   name: string;
@@ -366,6 +367,8 @@ export default class LLMService {
         return await this.getAnthropicCompletion(config, request);
       case LlmType.Ollama:
         return await this.getOllamaCompletion(config, request);
+      case LlmType.Relay:
+        return await this.getRelayCompletion(config, request);
       default:
         throw new BadDataException(`Unsupported LLM type: ${config.llmType}`);
     }
@@ -797,20 +800,6 @@ export default class LLMService {
     modelName: string;
     request: LLMCompletionRequest;
   }): Promise<HTTPResponse<JSONObject> | HTTPErrorResponse> {
-    let adaptation: OpenAIRequestAdaptation = this.getInitialRequestAdaptation(
-      data.config,
-      data.modelName,
-    );
-
-    /*
-     * Which spellings have actually gone out on the wire. Read off the built
-     * body rather than the adaptation, because TokenLimitParam.Default is a
-     * sentinel meaning "whatever the body already carried" — recording it
-     * would mark neither spelling as tried and let the loop resend a
-     * byte-identical request.
-     */
-    const attemptedTokenLimitParams: Set<TokenLimitParam> = new Set();
-
     /*
      * Validated once, before the first request: the adaptation loop below
      * re-posts to the same URL, so re-resolving per attempt would only add
@@ -824,6 +813,51 @@ export default class LLMService {
           defaultTimeoutInMs: 120000,
         }),
       );
+
+    return this.completeWithRequestAdaptation({
+      config: data.config,
+      modelName: data.modelName,
+      request: data.request,
+      send: (
+        body: JSONObject,
+      ): Promise<HTTPResponse<JSONObject> | HTTPErrorResponse> => {
+        return API.post<JSONObject>({
+          url: URL.fromString(data.requestUrl),
+          data: body,
+          headers: data.headers,
+          options: requestOptions,
+        });
+      },
+    });
+  }
+
+  /**
+   * The OpenAI-wire adaptation loop, independent of how a body reaches the
+   * model: `send` is an HTTP POST for direct providers and a queue round trip
+   * for the relay, and both get the same reshape-and-retry behaviour when the
+   * model rejects a generation parameter.
+   */
+  private static async completeWithRequestAdaptation(data: {
+    config: LLMProviderConfig;
+    modelName: string;
+    request: LLMCompletionRequest;
+    send: (
+      body: JSONObject,
+    ) => Promise<HTTPResponse<JSONObject> | HTTPErrorResponse>;
+  }): Promise<HTTPResponse<JSONObject> | HTTPErrorResponse> {
+    let adaptation: OpenAIRequestAdaptation = this.getInitialRequestAdaptation(
+      data.config,
+      data.modelName,
+    );
+
+    /*
+     * Which spellings have actually gone out on the wire. Read off the built
+     * body rather than the adaptation, because TokenLimitParam.Default is a
+     * sentinel meaning "whatever the body already carried" — recording it
+     * would mark neither spelling as tried and let the loop resend a
+     * byte-identical request.
+     */
+    const attemptedTokenLimitParams: Set<TokenLimitParam> = new Set();
 
     const post: () => Promise<
       HTTPResponse<JSONObject> | HTTPErrorResponse
@@ -840,12 +874,7 @@ export default class LLMService {
         attemptedTokenLimitParams.add(TokenLimitParam.MaxTokens);
       }
 
-      return API.post<JSONObject>({
-        url: URL.fromString(data.requestUrl),
-        data: body,
-        headers: data.headers,
-        options: requestOptions,
-      });
+      return data.send(body);
     };
 
     let response: HTTPResponse<JSONObject> | HTTPErrorResponse = await post();
@@ -1139,6 +1168,73 @@ export default class LLMService {
       response.jsonData as JSONObject,
       config.llmType,
     );
+  }
+
+  /*
+   * LlmType.Relay: the OpenAI-compatible path with the transport swapped for
+   * a Redis queue (Utils/LLM/LlmRelay.ts). The body builder, the adaptation
+   * loop and the response parser are the ones the direct providers use, so
+   * tool calls and provider errors behave identically. No base URL and no API
+   * key: the worker beside the model holds both, so the egress guard has
+   * nothing to check here. One attempt per adaptation — the queue is the
+   * buffer, and re-queuing a request nobody claimed would not help.
+   */
+  @CaptureSpan()
+  private static async getRelayCompletion(
+    config: LLMProviderConfig,
+    request: LLMCompletionRequest,
+  ): Promise<LLMCompletionResponse> {
+    if (!config.modelName) {
+      throw new BadDataException(
+        "Model Name is required for Relay providers. It must match a model the relay worker's gateway serves.",
+      );
+    }
+
+    if (!LlmRelay.isEnabled()) {
+      throw new BadDataException(
+        "LLM relay is not configured on this server: set LLM_RELAY_TOKEN and run a relay worker before using a Relay provider.",
+      );
+    }
+
+    const modelName: string = config.modelName;
+    const timeoutInMs: number = request.requestTimeoutInMs ?? 120000;
+
+    const response: HTTPErrorResponse | HTTPResponse<JSONObject> =
+      await this.completeWithRequestAdaptation({
+        config: config,
+        modelName: modelName,
+        request: request,
+        send: async (
+          body: JSONObject,
+        ): Promise<HTTPResponse<JSONObject> | HTTPErrorResponse> => {
+          const result: LlmRelayResult = await LlmRelay.enqueueAndWait({
+            body,
+            timeoutInMs,
+          });
+
+          if (result.status >= 200 && result.status < 300) {
+            return new HTTPResponse<JSONObject>(result.status, result.json, {});
+          }
+
+          return new HTTPErrorResponse(result.status, result.json, {});
+        },
+      });
+
+    const logAttributes: LogAttributes = {
+      llmType: config.llmType,
+      modelName: modelName,
+    };
+
+    if (response instanceof HTTPErrorResponse) {
+      this.throwProviderHTTPError({
+        providerName: "Relay",
+        response,
+        logAttributes,
+        includeProviderErrorDetails: request.includeProviderErrorDetails,
+      });
+    }
+
+    return this.parseOpenAIResponse(response.jsonData as JSONObject, "Relay");
   }
 
   /*

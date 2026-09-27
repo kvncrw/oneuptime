@@ -35,6 +35,10 @@ const LlmTypeDropdownOptions: Array<DropdownOption> = [
     label: "OpenAI-Compatible (vLLM, LocalAI, etc.)",
     value: LlmType.OpenAICompatible,
   },
+  {
+    label: "Relay (queued for an external worker)",
+    value: LlmType.Relay,
+  },
 ];
 
 export default LlmTypeDropdownOptions;

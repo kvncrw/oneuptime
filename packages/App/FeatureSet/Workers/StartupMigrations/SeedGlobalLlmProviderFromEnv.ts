@@ -106,10 +106,14 @@ export default class SeedGlobalLlmProviderFromEnv extends StartupMigrationBase {
      * Still seed (warn-and-seed) so the declarative sync semantics hold.
      */
     const missing: Array<string> = [];
-    // Keyless providers: Ollama and generic OpenAI-compatible servers (vLLM, etc.).
+    /*
+     * Keyless providers: Ollama, generic OpenAI-compatible servers (vLLM,
+     * etc.) and Relay, whose worker holds the credentials.
+     */
     if (
       llmType !== LlmType.Ollama &&
       llmType !== LlmType.OpenAICompatible &&
+      llmType !== LlmType.Relay &&
       !apiKey
     ) {
       missing.push("GLOBAL_LLM_PROVIDER_API_KEY");
@@ -123,8 +127,11 @@ export default class SeedGlobalLlmProviderFromEnv extends StartupMigrationBase {
     ) {
       missing.push("GLOBAL_LLM_PROVIDER_BASE_URL");
     }
-    // Generic OpenAI-compatible servers have no default model.
-    if (llmType === LlmType.OpenAICompatible && !modelName) {
+    // Generic OpenAI-compatible servers and the relay have no default model.
+    if (
+      (llmType === LlmType.OpenAICompatible || llmType === LlmType.Relay) &&
+      !modelName
+    ) {
       missing.push("GLOBAL_LLM_PROVIDER_MODEL_NAME");
     }
     if (missing.length > 0) {

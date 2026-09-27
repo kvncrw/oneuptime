@@ -36,16 +36,17 @@ const values = {
   GITHUB_APP_PRIVATE_KEY: Buffer.from(pem).toString("base64"),
   GITHUB_APP_WEBHOOK_SECRET: crypto.randomBytes(32).toString("hex"),
   CI_WATCH_FIXTURE_CONTROL_TOKEN: crypto.randomBytes(32).toString("hex"),
+  // Shared by the app, the relay worker fixture and the specs (RFM03 forges it).
+  LLM_RELAY_TOKEN: crypto.randomBytes(32).toString("hex"),
 };
 for (const [key, value] of Object.entries(values)) {
   env = env.replace(new RegExp("^" + key + "=.*\\n?", "gm"), "");
   env += "\n" + key + "=" + value + "\n";
 }
 fs.writeFileSync(envPath, env, { mode: 0o600 });
-fs.copyFileSync(
-  path.join(__dirname, "ci-watch.yml"),
-  path.join(scratch, "ci-watch.yml"),
-);
+for (const overlay of ["ci-watch.yml", "no-relay-token.yml"]) {
+  fs.copyFileSync(path.join(__dirname, overlay), path.join(scratch, overlay));
+}
 console.log(
   "CI watch fixture settings written to .scratch/discord-e2e/config.env; secrets are not printed.",
 );

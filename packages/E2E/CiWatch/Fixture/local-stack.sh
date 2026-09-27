@@ -13,11 +13,17 @@ cd "$repo_dir"
 source "$repo_dir/packages/E2E/Discord/Fixture/LocalStack/project.sh"
 project=$(e2e_project "$fixture_dir/config.env")
 
+# CI_WATCH_RELAY_TOKEN_UNSET=1 layers no-relay-token.yml (RFM02: app without LLM_RELAY_TOKEN).
+overlays=(-f "$fixture_dir/compose.yml" -f "$fixture_dir/protocol.yml" -f "$fixture_dir/ci-watch.yml")
+if [ "${CI_WATCH_RELAY_TOKEN_UNSET:-}" = "1" ]; then
+  overlays+=(-f "$fixture_dir/no-relay-token.yml")
+fi
+
 compose() {
   env -i PATH="$PATH" HOME="$HOME" docker compose \
     --project-directory "$fixture_dir" --project-name "$project" --profile test \
     --env-file "$fixture_dir/config.env" \
-    -f "$fixture_dir/compose.yml" -f "$fixture_dir/protocol.yml" -f "$fixture_dir/ci-watch.yml" "$@"
+    "${overlays[@]}" "$@"
 }
 
 case "${1:-help}" in
@@ -40,14 +46,17 @@ let text="";process.stdin.on("data",x=>text+=x);process.stdin.on("end",()=>{
     ;;
   start)
     # `up` re-creates the app container so it picks up the GITHUB_APP_* env.
-    compose up -d --no-build app ingress discord-fixture github-fixture llm-fixture
+    compose up -d --no-build app ingress discord-fixture github-fixture llm-fixture llm-relay-worker
     ;;
   test)
+    # LLM_RELAY_E2E_MODE (no-token | redis-down) unlocks the RelayStack specs
+    # for a stack reconfigured to match; unset, they report skipped.
     shift
     compose run --rm --no-deps \
       -e PLAYWRIGHT_HTML_REPORT=/evidence/ci-watch/html \
       -e PLAYWRIGHT_JSON_OUTPUT_NAME=/evidence/ci-watch/results.json \
       -e CI_WATCH_E2E_OUTPUT=/evidence/ci-watch/test-results \
+      -e LLM_RELAY_E2E_MODE="${LLM_RELAY_E2E_MODE:-}" \
       e2e npx playwright test --config playwright.ci-watch.config.ts "$@"
     ;;
   stop) compose stop ;;

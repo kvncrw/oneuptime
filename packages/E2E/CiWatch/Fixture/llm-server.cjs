@@ -9,8 +9,14 @@
  *   answer  - reply with `content` after `delayMs`
  *   tool    - first turn replies with a tool call (`toolName`, `toolArguments`);
  *             a turn that already carries a `tool` role message gets `content`
- *   error   - HTTP `status` (default 500) after `delayMs`
+ *   error   - HTTP `status` (default 500) after `delayMs`; optional `param`
+ *             and `code` ride in the OpenAI error object
  *   hang    - hold the socket open for `hangMs` (default 10 min), then 500
+ *   echo    - reply "Echo: " + every match of `echoRegex` in the raw body,
+ *             so concurrent callers can be told apart by their own text
+ *   reject-max-tokens - a request carrying `max_tokens` gets the 400 a
+ *             reasoning model returns (param max_tokens, unsupported_parameter);
+ *             one carrying `max_completion_tokens` instead gets `content`
  *
  * Every request body is recorded so a test can prove what reached the model
  * (FM22: no secret in any prompt).
@@ -138,8 +144,36 @@ const server = http.createServer(async (req, res) => {
           error: {
             message: mode.content || "fixture provider failure",
             type: "server_error",
+            ...(mode.param ? { param: mode.param } : {}),
+            ...(mode.code ? { code: mode.code } : {}),
           },
         });
+      if (mode.kind === "reject-max-tokens" && body.max_tokens !== undefined)
+        return send(res, 400, {
+          error: {
+            message:
+              "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+            type: "invalid_request_error",
+            param: "max_tokens",
+            code: "unsupported_parameter",
+          },
+        });
+      if (mode.kind === "echo") {
+        const matches = mode.echoRegex
+          ? raw.match(new RegExp(mode.echoRegex, "g")) || []
+          : [];
+        return send(
+          res,
+          200,
+          completion(
+            {
+              role: "assistant",
+              content: `Echo: ${[...new Set(matches)].join(" ")}`,
+            },
+            "stop",
+          ),
+        );
+      }
       if (body.stream)
         return send(res, 400, {
           error: { message: "The fixture does not stream" },

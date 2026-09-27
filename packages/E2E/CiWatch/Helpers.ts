@@ -48,6 +48,9 @@ export const routes: {
   threads: string;
   codeRepository: string;
   llmProvider: string;
+  llmProviderTest: string;
+  relayClaim: string;
+  relayResult: string;
 } = {
   config: "/api/ci-watch-config",
   workflow: "/api/ci-workflow",
@@ -63,7 +66,22 @@ export const routes: {
   threads: "/api/discord-resource-thread",
   codeRepository: "/api/code-repository",
   llmProvider: "/api/llm-provider",
+  llmProviderTest: "/api/llm-provider/test",
+  /*
+   * LLM relay (~/.buzz/PLANS/ONEUPTIME_LLM_RELAY.md): a worker long-polls
+   * `claim` and answers on `result/:id`, both gated by the
+   * `x-llm-relay-token` header against the app's LLM_RELAY_TOKEN.
+   */
+  relayClaim: "/api/llm-relay/claim",
+  relayResult: "/api/llm-relay/result",
 };
+
+export const relayTokenHeader: string = "x-llm-relay-token";
+
+// The timeouts the CI watch callers pass, so the relay specs can bound waits.
+export const astraTimeoutMs: number = 45000;
+export const relayMaxClaimWaitSeconds: number = 25;
+export const relayMaxBodyBytes: number = 1024 * 1024;
 
 export const actions: {
   fileIssue: string;
@@ -318,6 +336,244 @@ export const llmFixture: {
     );
   },
 };
+
+// ------------------------------------------------------------- LLM relay --
+
+/*
+ * The relay worker fixture (Fixture/llm-relay-worker.cjs) models the
+ * headshot worker: it long-polls the app's claim route, forwards each body
+ * verbatim to the LLM fixture and posts the upstream answer back. It can be
+ * paused so a spec can claim by hand or model "no worker running".
+ */
+export interface RelayWorkerClaim {
+  id: string;
+  claimedAt: string;
+  model: string;
+  hasTools: boolean;
+}
+export interface RelayWorkerResult {
+  id: string;
+  upstreamStatus: number;
+  postStatus: number;
+}
+export interface RelayWorkerState {
+  enabled: boolean;
+  forwardDelayMs: number;
+  claims: Array<RelayWorkerClaim>;
+  results: Array<RelayWorkerResult>;
+  errors: Array<string>;
+  claimStatuses: Array<number>;
+}
+
+export const relayWorker: {
+  state: () => Promise<RelayWorkerState>;
+  reset: () => Promise<RelayWorkerState>;
+  program: (input: JSONish) => Promise<RelayWorkerState>;
+} = {
+  state: (): Promise<RelayWorkerState> => {
+    return control(
+      "http://llm-relay-worker:8090",
+      "CI_WATCH_FIXTURE_CONTROL_TOKEN",
+      "state",
+    );
+  },
+  reset: (): Promise<RelayWorkerState> => {
+    return control(
+      "http://llm-relay-worker:8090",
+      "CI_WATCH_FIXTURE_CONTROL_TOKEN",
+      "reset",
+      {},
+    );
+  },
+  // `{enabled: false}` returns only once the worker is idle (no claim in flight).
+  program: (input: JSONish): Promise<RelayWorkerState> => {
+    return control(
+      "http://llm-relay-worker:8090",
+      "CI_WATCH_FIXTURE_CONTROL_TOKEN",
+      "program",
+      input,
+    );
+  },
+};
+
+export function relayToken(): string {
+  const token: string | undefined = process.env["LLM_RELAY_TOKEN"];
+  if (!token) {
+    throw new Error("Disposable LLM_RELAY_TOKEN is required");
+  }
+  return token;
+}
+
+export interface RelayJob {
+  id: string;
+  body: JSONish;
+}
+
+export interface RelayClaimResult {
+  status: number;
+  elapsedMs: number;
+  job: RelayJob | undefined;
+  text: string;
+}
+
+/*
+ * One claim as the worker makes it. `token: null` sends no header at all;
+ * a string other than the real token models a wrong one.
+ */
+export async function relayClaim(options: {
+  waitSeconds: number;
+  token?: string | null | undefined;
+}): Promise<RelayClaimResult> {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+  if (options.token !== null) {
+    headers[relayTokenHeader] = options.token ?? relayToken();
+  }
+  const started: number = Date.now();
+  const response: Response = await fetch(`${app}${routes.relayClaim}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ waitSeconds: options.waitSeconds }),
+  });
+  const text: string = await response.text();
+  let job: RelayJob | undefined;
+  if (response.status === 200 && text) {
+    const parsed: JSONish = JSON.parse(text) as JSONish;
+    job = { id: String(parsed["id"]), body: parsed["body"] as JSONish };
+  }
+  return {
+    status: response.status,
+    elapsedMs: Date.now() - started,
+    job,
+    text,
+  };
+}
+
+// Posts an upstream answer for a claimed job, as the worker does.
+export async function relayResult(options: {
+  id: string;
+  status: number;
+  json: JSONish;
+  token?: string | null | undefined;
+}): Promise<{ status: number; text: string }> {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+  if (options.token !== null) {
+    headers[relayTokenHeader] = options.token ?? relayToken();
+  }
+  const response: Response = await fetch(
+    `${app}${routes.relayResult}/${encodeURIComponent(options.id)}`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ status: options.status, json: options.json }),
+    },
+  );
+  return { status: response.status, text: await response.text() };
+}
+
+// Pops every job left on the queue so the next spec starts from empty.
+export async function drainRelayQueue(): Promise<number> {
+  let drained: number = 0;
+  for (let attempt: number = 0; attempt < 50; attempt++) {
+    const claim: RelayClaimResult = await relayClaim({ waitSeconds: 0 });
+    if (claim.status !== 200) {
+      break;
+    }
+    drained++;
+  }
+  return drained;
+}
+
+// An OpenAI-shaped completion, for results a spec posts by hand.
+export function relayCompletion(content: string): JSONish {
+  return {
+    id: `chatcmpl-e2e-${randomBytes(4).toString("hex")}`,
+    object: "chat.completion",
+    created: Math.floor(Date.now() / 1000),
+    model: github.llmModel,
+    choices: [
+      {
+        index: 0,
+        message: { role: "assistant", content },
+        finish_reason: "stop",
+        logprobs: null,
+      },
+    ],
+    usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+  };
+}
+
+export const relayModel: string = github.llmModel;
+
+// A `Relay` provider: no base URL, no API key, only a model name.
+export async function createRelayProvider(
+  page: Page,
+  projectId: string,
+  modelName: string = relayModel,
+): Promise<string> {
+  const row: JSONish = await createItem({
+    page,
+    projectId,
+    path: routes.llmProvider,
+    item: {
+      projectId,
+      name: "CI watch relay",
+      llmType: "Relay",
+      modelName,
+      isDefault: true,
+    },
+  });
+  return toId(row["_id"]);
+}
+
+export interface ProviderTestResult {
+  status: number;
+  elapsedMs: number;
+  text: string;
+}
+
+// The dashboard's "Test connection" button: one completion through the provider.
+export async function testProvider(
+  page: Page,
+  projectId: string,
+  providerId: string,
+): Promise<ProviderTestResult> {
+  const started: number = Date.now();
+  const response: APIResponse = await page.request.post(
+    `${app}${routes.llmProviderTest}`,
+    {
+      headers: { "content-type": "application/json", ...headers(projectId) },
+      data: { llmProviderId: providerId },
+    },
+  );
+  return {
+    status: response.status(),
+    elapsedMs: Date.now() - started,
+    text: await response.text(),
+  };
+}
+
+// The latest interaction follow-up the fixture saw for a token, if any.
+export async function interactionFollowUp(
+  token: string,
+): Promise<PostedMessage | undefined> {
+  const state: DiscordState = await discordFixture.state();
+  return state.postedMessages.find((message: PostedMessage): boolean => {
+    return (
+      message.webhook_kind === "interaction" &&
+      message.interaction_token === token
+    );
+  });
+}
+
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve: (value: void) => void): void => {
+    setTimeout(resolve, ms);
+  });
+}
 
 // ----------------------------------------------------------- GitHub events --
 
