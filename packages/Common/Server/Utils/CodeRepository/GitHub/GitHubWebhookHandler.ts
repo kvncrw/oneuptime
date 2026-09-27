@@ -30,6 +30,9 @@ import GitHubWebhookEvents, {
   GitHubWebhookSender,
 } from "./GitHubWebhookEvents";
 import CaptureSpan from "../../Telemetry/CaptureSpan";
+import CiWatchIntake, {
+  CiWatchWebhookResult,
+} from "../../CiWatch/CiWatchIntake";
 
 /*
  * The interactive half of the GitHub App: everything between a verified
@@ -115,6 +118,26 @@ export default class GitHubWebhookHandler {
     payload: JSONObject;
   }): Promise<GitHubWebhookHandlingResult> {
     try {
+      /*
+       * The CI watch is not "interactive" — nobody addressed the app — but
+       * it shares the delivery fence: a redelivered workflow_run must not
+       * be processed twice, and the fence is released below on error so a
+       * transient failure still gets GitHub's retry.
+       */
+      if (data.event === GitHubWebhookEvent.WorkflowRun) {
+        if (await GitHubWebhookHandler.isDuplicateDelivery(data.deliveryId)) {
+          logger.debug(
+            `Ignoring a redelivered GitHub workflow_run webhook (${data.deliveryId}).`,
+          );
+          return NOT_HANDLED("duplicate-delivery");
+        }
+
+        const ciResult: CiWatchWebhookResult =
+          await CiWatchIntake.handleWorkflowRunWebhook(data.payload);
+
+        return { handled: ciResult.handled, outcome: ciResult.outcome };
+      }
+
       if (!GitHubWebhookHandler.isInteractiveEvent(data.event)) {
         return NOT_HANDLED("event-not-interactive");
       }

@@ -108,6 +108,14 @@ export const AI_CODE_FIX_FEATURE: string = "AI Code Fix";
 export const WORKFLOW_AI_FEATURE: string = "Workflow AI";
 
 /*
+ * The LlmLog feature name for the CI watch: one constrained analysis call per
+ * alertable GitHub Actions failure, fired by webhooks and the reconcile sweep
+ * with no human in the loop. The Discord actions (/astra, retire assessment)
+ * reuse the label so one ledger row covers the feature.
+ */
+export const AI_CI_WATCH_FEATURE: string = "CI Watch";
+
+/*
  * The LlmLog feature name for AI runbook steps. Runbooks are triggered by
  * incident/alert/maintenance rules, so these calls are storm-shaped: one
  * flapping monitor can start many executions.
@@ -246,6 +254,12 @@ export const AUTONOMOUS_AI_FEATURES: Array<string> = [
    * larger per-run tool budget — the daily subject lane must cover it.
    */
   AI_REMEDIATION_EXECUTION_FEATURE,
+  /*
+   * CI watch failure analysis: one call per alertable workflow failure,
+   * fired by webhooks and a ten-minute sweep. A repository-wide red push
+   * is a storm, so the daily budget must cover it.
+   */
+  AI_CI_WATCH_FEATURE,
   /*
    * Pre-rename labels. Keeps the budget honest for rows already persisted
    * under the old names — read the LEGACY_AUTONOMOUS_AI_FEATURES comment

@@ -27,6 +27,7 @@ import NotificationRuleWorkspaceChannel from "../../Types/Workspace/Notification
 import logger from "../Utils/Logger";
 import CaptureSpan from "../Utils/Telemetry/CaptureSpan";
 import PostgresErrorTranslator from "../Utils/Database/PostgresErrorTranslator";
+import QueryHelper from "../Types/Database/QueryHelper";
 
 /*
  * Why this service exists (HOM-42): the shared rule path called
@@ -116,13 +117,24 @@ export class Service extends DatabaseService<Model> {
     projectId: ObjectID;
     authToken: string;
     resource: ResourceRef;
-    notificationRuleId: ObjectID;
+    /*
+     * The rule that asked for the thread. Absent for resources that are not
+     * driven by notification rules (the CI watch), whose rows are fenced by
+     * the partial unique index on the model instead.
+     */
+    notificationRuleId?: ObjectID | undefined;
+    /*
+     * Parent channel override. Defaults to the installation's incident
+     * parent; the CI watch names its own channel from CiWatchConfig.
+     */
+    parentChannelId?: string | undefined;
     channelName: string;
     isPrivate: boolean;
   }): Promise<WorkspaceChannel | null> {
     const installation: Installation = await this.installation(
       data.projectId,
       data.authToken,
+      data.parentChannelId,
     );
     const existing: Model | null = await this.claim({
       ...data,
@@ -462,7 +474,7 @@ export class Service extends DatabaseService<Model> {
   private async claim(data: {
     projectId: ObjectID;
     resource: ResourceRef;
-    notificationRuleId: ObjectID;
+    notificationRuleId?: ObjectID | undefined;
     channelName: string;
     isPrivate: boolean;
     installation: Installation;
@@ -484,7 +496,9 @@ export class Service extends DatabaseService<Model> {
               data.projectId.toString(),
               data.resource.resourceType,
               data.resource.resourceId.toString(),
-              data.notificationRuleId.toString(),
+              data.notificationRuleId
+                ? data.notificationRuleId.toString()
+                : null,
               data.installation.id.toString(),
               data.installation.version,
               data.installation.guildId,
@@ -1194,7 +1208,7 @@ export class Service extends DatabaseService<Model> {
     const rows: Array<unknown> =
       Array.isArray(result) && Array.isArray(result[0])
         ? (result[0] as Array<unknown>)
-        : ((result as Array<unknown>) ?? []);
+        : (result as Array<unknown>) ?? [];
     return rows.length > 0;
   }
 
@@ -1264,12 +1278,21 @@ export class Service extends DatabaseService<Model> {
   private async installation(
     projectId: ObjectID,
     authToken: string,
+    parentChannelId?: string | undefined,
   ): Promise<Installation> {
     const live: Installation | null = await this.liveInstallation(projectId);
     if (!live || live.authToken !== authToken) {
       throw new BadDataException(
         "Discord project installation is missing or credentials do not match.",
       );
+    }
+    if (parentChannelId) {
+      /*
+       * The override rides on the installation object so every later check
+       * (belongs, verify, persist) compares against the channel the thread
+       * was really created under, not the incident parent.
+       */
+      return { ...live, parentId: DiscordClient.snowflake(parentChannelId) };
     }
     if (!live.parentId) {
       throw new BadDataException(
@@ -1515,7 +1538,7 @@ export class Service extends DatabaseService<Model> {
     id?: ObjectID;
     projectId?: ObjectID;
     resource?: ResourceRef;
-    notificationRuleId?: ObjectID;
+    notificationRuleId?: ObjectID | undefined;
   }): Promise<Model | null> {
     return await this.findOneBy({
       query: data.id
@@ -1524,7 +1547,8 @@ export class Service extends DatabaseService<Model> {
             projectId: data.projectId!,
             resourceType: data.resource!.resourceType,
             resourceId: data.resource!.resourceId,
-            notificationRuleId: data.notificationRuleId!,
+            // A rule-less claim must not match a rule's row for the same resource.
+            notificationRuleId: data.notificationRuleId || QueryHelper.isNull(),
           },
       select: this.columns(),
       props: { isRoot: true },

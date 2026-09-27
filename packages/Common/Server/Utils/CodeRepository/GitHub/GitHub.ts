@@ -412,6 +412,13 @@ export default class GitHubUtil extends HostedCodeRepository {
          * (the PR sync sweep) retry without it.
          */
         checks?: "read";
+        /*
+         * Actions READ for the CI watch: workflow runs, jobs and job logs.
+         * Requested only by the CI watch calls; existing callers keep their
+         * permission sets, so an app without "Actions: Read" still serves
+         * every other feature.
+         */
+        actions?: "read";
         metadata?: "read";
       };
     },

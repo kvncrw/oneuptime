@@ -21,6 +21,8 @@ export enum GitHubWebhookEvent {
   PullRequestReviewComment = "pull_request_review_comment",
   Installation = "installation",
   InstallationRepositories = "installation_repositories",
+  // CI watch: a workflow run finished (action "completed").
+  WorkflowRun = "workflow_run",
 }
 
 export interface GitHubWebhookRepository {
