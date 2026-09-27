@@ -6,8 +6,8 @@ import {
   LlmState,
   ProvisionedProject,
   WorkflowRef,
-  actions,
   astraPayload,
+  astraTools,
   countRequests,
   discordFixture,
   discordIds,
@@ -105,14 +105,15 @@ test("FM19 /astra used outside an alert thread asks which workflow and does not 
   ))!;
   const github: GitHubState = await githubFixture.state();
   const issuesBefore: number = countRequests(github, "POST", /\/issues$/);
-  const llmBefore: number = (await llmFixture.state()).requests.length;
   // The model would happily pick an action; the app must not ask it to.
   await llmFixture.program({
     kind: "tool",
-    toolName: actions.fileIssue,
+    toolName: astraTools.fileIssue,
     toolArguments: {},
     content: "guessed",
   });
+  // Programming clears the request log, so count from after it.
+  const llmBefore: number = (await llmFixture.state()).requests.length;
 
   for (const channelId of [discordIds.channelId, discordIds.threadChannelId]) {
     const reply: InteractionResult & { deferred: boolean } = await finalReply(
@@ -210,7 +211,7 @@ test("contract: /astra maps 'mark this known red' to CiMarkKnownRed on the threa
   const { workflow, threadId } = await alertInThread("astra known-red");
   await llmFixture.program({
     kind: "tool",
-    toolName: actions.markKnownRed,
+    toolName: astraTools.markKnownRed,
     toolArguments: { reason: "flaky upstream image" },
     content: "Marked known-red.",
   });
@@ -221,6 +222,11 @@ test("contract: /astra maps 'mark this known red' to CiMarkKnownRed on the threa
     }),
   );
   expect(reply.status).toBe(200);
+  const llm: LlmState = await llmFixture.state();
+  expect(
+    llm.requests[llm.requests.length - 1]?.tools,
+    "the app offered the tool the model picked",
+  ).toContain(astraTools.markKnownRed);
   await expect
     .poll(async (): Promise<boolean> => {
       return Boolean(

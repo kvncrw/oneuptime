@@ -256,9 +256,10 @@ test("FM21 button presses are acknowledged inside Discord's 3 s window with a de
       const muted: unknown = (
         await findWorkflow(project.page, project.projectId, workflow)
       )?.["mutedUntil"];
+      // The API returns dates as { _type: "DateTime", value }; toId unwraps it.
       return (
         Boolean(muted) &&
-        new Date(String(muted)).getTime() > Date.now() + 23 * 3600 * 1000
+        new Date(toId(muted)).getTime() > Date.now() + 23 * 3600 * 1000
       );
     })
     .toBe(true);

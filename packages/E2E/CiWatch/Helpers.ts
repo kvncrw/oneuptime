@@ -77,6 +77,15 @@ export const actions: {
   mute: "CiMute",
 };
 
+// The tool names /astra offers the model. Distinct from the button action ids above.
+export const astraTools: {
+  fileIssue: string;
+  markKnownRed: string;
+} = {
+  fileIssue: "file_issue",
+  markKnownRed: "mark_known_red",
+};
+
 export const eventTypes: {
   newFailure: string;
   signatureChanged: string;
@@ -1180,9 +1189,15 @@ export async function releaseProject(
     return;
   }
   try {
-    await updateItem(project.page, project.projectId, routes.config, project.configId, {
-      isEnabled: false,
-    });
+    await updateItem(
+      project.page,
+      project.projectId,
+      routes.config,
+      project.configId,
+      {
+        isEnabled: false,
+      },
+    );
   } catch {
     // The context may already be unusable; the worker restart case.
   }
