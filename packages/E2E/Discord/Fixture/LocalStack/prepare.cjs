@@ -22,9 +22,10 @@ const start = app.indexOf(marker),
   end = app.indexOf("{{ end }}", mid);
 if (start < 0 || mid < 0 || end < 0) throw Error("Unexpected App template");
 app = app.slice(0, start) + app.slice(mid + 10, end) + app.slice(end + 9);
+// 13.0.8 has a bare FROM; 14.x names the stage. Convert either.
 app = app.replace(
-  "node:26-alpine3.24 AS base",
-  "node:26-bookworm-slim AS base",
+  /node:26-alpine3\.24( AS base)?/,
+  (_, stage) => "node:26-bookworm-slim" + (stage || ""),
 );
 app = app.replace(
   /RUN apk upgrade --no-cache \\\n\s*&& apk add --no-cache bash curl \\\n\s*&& apk add --no-cache --virtual \.gyp python3 make g\+\+/,
