@@ -50,6 +50,7 @@ export interface CiWatchDecision {
     | "ignored-conclusion"
     | "already-recorded"
     | "seeded"
+    | "older-run"
     | "muted"
     | "silent"
     | "alert";
@@ -73,12 +74,32 @@ export default class CiWatchDecisionTable {
     );
   }
 
+  /*
+   * GitHub run ids only grow, so a smaller id is an older run: a late
+   * webhook, or a sweep page read before a newer webhook landed.
+   */
+  public static isOlderRun(
+    runId: string,
+    lastRunId: string | undefined,
+  ): boolean {
+    if (!lastRunId || !(/^\d+$/).test(runId) || !(/^\d+$/).test(lastRunId)) {
+      return false;
+    }
+    return BigInt(runId) < BigInt(lastRunId);
+  }
+
   public static decide(data: {
     workflow: CiWorkflow | null;
     run: CiRunObservation;
     now: Date;
+    /*
+     * True once the repository has been swept before. Only a repository's
+     * first sighting seeds silently; a workflow added later is new work and
+     * its first failure alerts.
+     */
+    repositorySeeded: boolean;
   }): CiWatchDecision {
-    const { workflow, run, now } = data;
+    const { workflow, run, now, repositorySeeded } = data;
 
     if (!CiWatchDecisionTable.isActionable(run.conclusion)) {
       return { outcome: "ignored-conclusion", eventType: null, patch: null };
@@ -106,13 +127,19 @@ export default class CiWatchDecisionTable {
     };
 
     if (!workflow) {
-      // First sighting: remember it, never alert on the backlog.
-      return { outcome: "seeded", eventType: null, patch };
+      // A new workflow in an already-watched repository alerts on its first failure.
+      return repositorySeeded && failed
+        ? { outcome: "alert", eventType: CiWorkflowEventType.NewFailure, patch }
+        : { outcome: "seeded", eventType: null, patch };
     }
 
     if (workflow.lastRunId && workflow.lastRunId === run.runId) {
       // Webhook and sweep both saw it; whichever came second is a no-op.
       return { outcome: "already-recorded", eventType: null, patch: null };
+    }
+
+    if (CiWatchDecisionTable.isOlderRun(run.runId, workflow.lastRunId)) {
+      return { outcome: "older-run", eventType: null, patch: null };
     }
 
     if (workflow.mutedUntil && workflow.mutedUntil.getTime() > now.getTime()) {

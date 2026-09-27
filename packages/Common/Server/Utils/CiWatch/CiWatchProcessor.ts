@@ -7,6 +7,7 @@ import CiWorkflowEvent, {
 import CodeRepository from "../../../Models/DatabaseModels/CodeRepository";
 import SortOrder from "../../../Types/BaseDatabase/SortOrder";
 import ObjectID from "../../../Types/ObjectID";
+import PositiveNumber from "../../../Types/PositiveNumber";
 import { WorkspaceMessageBlock } from "../../../Types/Workspace/WorkspaceMessagePayload";
 import CiWorkflowEventService from "../../Services/CiWorkflowEventService";
 import CiWorkflowService from "../../Services/CiWorkflowService";
@@ -44,6 +45,9 @@ const LOG_TAIL_LINES: number = 200;
 const RECENT_EVENT_LIMIT: number = 5;
 const MONITOR_FAILURE_NAMESPACE: string = "ci-watch-monitor-failure";
 const MONITOR_FAILURE_WINDOW_SECONDS: number = 60 * 60;
+const WORKFLOW_LEASE_NAMESPACE: string = "ci-watch-workflow-lease";
+// Covers three GitHub calls, one LLM call and a Discord post with retry.
+const WORKFLOW_LEASE_SECONDS: number = 5 * 60;
 
 export interface CiWatchRepositoryContext {
   config: CiWatchConfig;
@@ -53,7 +57,7 @@ export interface CiWatchRepositoryContext {
 }
 
 export interface CiWatchProcessResult {
-  outcome: CiWatchDecision["outcome"] | "branch-not-watched";
+  outcome: CiWatchDecision["outcome"] | "branch-not-watched" | "busy";
   eventId?: ObjectID | undefined;
 }
 
@@ -81,13 +85,22 @@ export default class CiWatchProcessor {
     );
   }
 
+  /*
+   * The webhook and the sweep can carry the same run at the same moment. The
+   * lastRunId check alone is read-then-write, so both would pass it and post
+   * twice. A per-workflow lease serializes them; the loser returns "busy",
+   * and a busy webhook run is picked up by the next sweep through lastRunId.
+   * With the cache down the lease is skipped: a rare duplicate alert beats a
+   * silent watch.
+   */
   @CaptureSpan()
   public static async processRun(data: {
     context: CiWatchRepositoryContext;
     run: GitHubActionsRun;
+    // Pass when the caller already knows; the webhook path looks it up.
+    repositorySeeded?: boolean | undefined;
   }): Promise<CiWatchProcessResult> {
     const { context, run } = data;
-    const now: Date = new Date();
 
     if (CiWatchDecisionTable.isIgnored(run.conclusion)) {
       return { outcome: "ignored-conclusion" };
@@ -96,6 +109,61 @@ export default class CiWatchProcessor {
     if (run.headBranch !== context.branchName) {
       return { outcome: "branch-not-watched" };
     }
+
+    const leaseKey: string = `${context.repository.id!.toString()}:${run.workflowId}`;
+    const leaseToken: string = ObjectID.generate().toString();
+    let leased: boolean = false;
+
+    try {
+      leased = await GlobalCache.setStringIfNotExists(
+        WORKFLOW_LEASE_NAMESPACE,
+        leaseKey,
+        leaseToken,
+        { expiresInSeconds: WORKFLOW_LEASE_SECONDS },
+      );
+
+      if (!leased) {
+        return { outcome: "busy" };
+      }
+    } catch (error) {
+      logger.warn(`CI watch: workflow lease unavailable, continuing: ${error}`);
+    }
+
+    try {
+      return await CiWatchProcessor.processLeasedRun(data);
+    } finally {
+      if (leased) {
+        try {
+          await GlobalCache.deleteKeyIfValue(
+            WORKFLOW_LEASE_NAMESPACE,
+            leaseKey,
+            leaseToken,
+          );
+        } catch (error) {
+          logger.debug(`CI watch: could not release workflow lease: ${error}`);
+        }
+      }
+    }
+  }
+
+  // Seeded = the repository already has at least one watched workflow row.
+  public static async isRepositorySeeded(
+    repositoryId: ObjectID,
+  ): Promise<boolean> {
+    const count: PositiveNumber = await CiWorkflowService.countBy({
+      query: { codeRepositoryId: repositoryId },
+      props: { isRoot: true },
+    });
+    return count.toNumber() > 0;
+  }
+
+  private static async processLeasedRun(data: {
+    context: CiWatchRepositoryContext;
+    run: GitHubActionsRun;
+    repositorySeeded?: boolean | undefined;
+  }): Promise<CiWatchProcessResult> {
+    const { context, run } = data;
+    const now: Date = new Date();
 
     let workflow: CiWorkflow | null = await CiWorkflowService.findOneBy({
       query: {
@@ -109,6 +177,15 @@ export default class CiWatchProcessor {
     if (workflow?.lastRunId && workflow.lastRunId === run.id) {
       return { outcome: "already-recorded" };
     }
+
+    if (CiWatchDecisionTable.isOlderRun(run.id, workflow?.lastRunId)) {
+      return { outcome: "older-run" };
+    }
+
+    const repositorySeeded: boolean = workflow
+      ? true
+      : data.repositorySeeded ??
+        (await CiWatchProcessor.isRepositorySeeded(context.repository.id!));
 
     /*
      * Failure details cost three GitHub calls, so only a red run pays for
@@ -131,6 +208,7 @@ export default class CiWatchProcessor {
         failureSignature: details?.signature,
       },
       now,
+      repositorySeeded,
     });
 
     if (!decision.patch) {

@@ -239,10 +239,18 @@ export default class CiWatchIntake {
         continue;
       }
 
+      // Decided once per sweep, or the repo's first sweep would alert on its own backlog.
+      const repositorySeeded: boolean =
+        await CiWatchProcessor.isRepositorySeeded(repository.id!);
+
       for (const run of CiWatchIntake.newestPerWorkflow(runs)) {
         try {
           const result: CiWatchProcessResult =
-            await CiWatchProcessor.processRun({ context, run });
+            await CiWatchProcessor.processRun({
+              context,
+              run,
+              repositorySeeded,
+            });
 
           summary.runsProcessed++;
 
