@@ -92,6 +92,8 @@ export default class LlmRelay {
       lazyConnect: true,
       enableOfflineQueue: true,
       maxRetriesPerRequest: 1,
+      // A vanished Redis must surface in seconds, not after two 10 s connects.
+      connectTimeout: 3000,
     });
   }
 
@@ -153,15 +155,27 @@ export default class LlmRelay {
 
       /*
        * The BLPOP timeout is Redis-side; the sleep is the JS-side backstop
-       * for a connection that drops mid-wait and re-queues the pop.
+       * for a connection that drops mid-wait and re-queues the pop. A pop
+       * that rejects (Redis went away while we waited) is reported as such,
+       * not as a worker that never answered.
        */
+      const failure: { error: Error | null } = { error: null };
       const popped: [string, string] | null = await Promise.race([
         blocking.blpop(resultKey, waitSeconds).catch((error: Error) => {
-          logger.error(`LLM relay: waiting for result ${id} failed: ${error}`);
+          failure.error = error;
           return null;
         }),
         this.sleep(data.timeoutInMs + 2000),
       ]);
+
+      if (failure.error) {
+        logger.error(
+          `LLM relay: lost Redis while waiting for result ${id}: ${failure.error}`,
+        );
+        throw new ServiceUnavailableException(
+          `LLM relay: lost the Redis connection while waiting for the worker's answer (${failure.error.message}).`,
+        );
+      }
 
       if (!popped) {
         throw new BadDataException(

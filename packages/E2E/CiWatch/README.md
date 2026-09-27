@@ -142,22 +142,28 @@ CI_WATCH_RELAY_TOKEN_UNSET=1 bash packages/E2E/CiWatch/Fixture/local-stack.sh st
 LLM_RELAY_E2E_MODE=no-token bash packages/E2E/CiWatch/Fixture/local-stack.sh test --grep RFM02
 bash packages/E2E/CiWatch/Fixture/local-stack.sh start
 
-# RFM12: Redis stopped under a running app. Nothing can be provisioned without
-# Redis (signup takes a Redis mutex, session refresh fails closed), so the prep
-# half saves a signed-in session and a Relay provider first, and the probe half
-# runs within the session JWT's 15 minutes with globalSetup skipped.
-bash packages/E2E/CiWatch/Fixture/local-stack.sh test --grep "RFM12 prep"
-docker stop <project>-valkey-1
-LLM_RELAY_E2E_MODE=redis-down bash packages/E2E/CiWatch/Fixture/local-stack.sh test --grep "RFM12 Redis"
-docker start <project>-valkey-1
+# RFM12: Redis lost while a Relay call is waiting. The spec starts /astra with
+# the worker paused, then writes /evidence/ci-watch/relay-stop-redis.json; a
+# watcher stops valkey when that file appears. (A Redis that is already down
+# never reaches the relay: signup, session refresh, the permission cache,
+# the Discord rate limiter and the CI watch leases all fail closed first.)
+docker run --rm -v <project>_evidence:/evidence redis:7-bookworm rm -f /evidence/ci-watch/relay-stop-redis.json
+( until docker run --rm -v <project>_evidence:/evidence:ro redis:7-bookworm test -e /evidence/ci-watch/relay-stop-redis.json; do sleep 1; done
+  docker stop <project>-valkey-1 ) &
+LLM_RELAY_E2E_MODE=redis-down bash packages/E2E/CiWatch/Fixture/local-stack.sh test --grep RFM12
+wait; docker start <project>-valkey-1
 ```
 
 Relay contract points the suite pins beyond the plan: a malformed result id is
 refused with 400 (a well-formed unknown id is accepted with 200); `waitSeconds`
 above 25 is clamped, not rejected; Relay providers require a model name; the
 relay makes one attempt per request-adaptation step (no HTTP retry ladder).
-RFM12 uses the provider test route only, because Discord interactions answer
-503 while their rate limiter has no Redis.
+A Redis connection lost mid-wait is reported as a 503 "lost the Redis
+connection" error, distinct from the "did not answer" timeout, and the
+claim/result routes answer 503 naming Redis while it is down. The provider
+"Test connection" route, which RFM02 and RFM10 use, needed a fix in this fork:
+upstream selected `isGlobalLlm` (readable by nobody) with the caller's
+permissions and answered 422 for every project owner.
 
 ## Contract points the server must meet
 
