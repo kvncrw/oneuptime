@@ -19,6 +19,7 @@ import {
   messageText,
   nextRunId,
   provisionProject,
+  releaseProject,
   repoFullName,
   routes,
   seedGreen,
@@ -62,7 +63,7 @@ test.afterEach(
 );
 
 test.afterAll(async (): Promise<void> => {
-  await project?.context.close();
+  await releaseProject(project);
 });
 
 async function alertCount(

@@ -21,6 +21,7 @@ import {
   nextRunId,
   programFailure,
   provisionProject,
+  releaseProject,
   sampleFailureLog,
   seedGreen,
   sendInteraction,
@@ -70,7 +71,7 @@ test.afterEach(
 
 test.afterAll(async (): Promise<void> => {
   await discordFixture.scenario("valid");
-  await project?.context.close();
+  await releaseProject(project);
 });
 
 async function postsToThread(threadId: string): Promise<number> {

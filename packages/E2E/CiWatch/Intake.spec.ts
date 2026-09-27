@@ -20,6 +20,7 @@ import {
   programFailure,
   provisionProject,
   reconcile,
+  releaseProject,
   repoFullName,
   runListEntry,
   sampleFailureLog,
@@ -59,7 +60,7 @@ test.afterEach(
 );
 
 test.afterAll(async (): Promise<void> => {
-  await project?.context.close();
+  await releaseProject(project);
 });
 
 async function noStateFor(workflow: WorkflowRef): Promise<void> {
@@ -359,6 +360,6 @@ test("FM05 a repository's first sweep seeds every workflow it finds and does not
       return (await listEvents(fresh.page, fresh.projectId)).length;
     }, 0);
   } finally {
-    await fresh.context.close();
+    await releaseProject(fresh);
   }
 });

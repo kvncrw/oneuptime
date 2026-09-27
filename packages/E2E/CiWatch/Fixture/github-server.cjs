@@ -37,6 +37,10 @@ const reset = () => {
   state = {
     scenario: { runs: "ok", jobs: "ok", logs: "ok", issues: "ok", token: "ok" },
     installationId: ids.installationId,
+    // Every id programmed since the last reset. Each provisioned project
+    // binds its own id so a webhook fans out to one project only, while
+    // earlier projects can still mint installation tokens.
+    knownInstallationIds: new Set([ids.installationId]),
     repositories: defaultRepositories(),
     runs: {},
     jobs: {},
@@ -140,8 +144,10 @@ const server = https.createServer(
           const input = JSON.parse(await readBody(req));
           if (input.scenario) Object.assign(state.scenario, input.scenario);
           if (input.repositories) state.repositories = input.repositories;
-          if (input.installationId)
+          if (input.installationId) {
             state.installationId = String(input.installationId);
+            state.knownInstallationIds.add(state.installationId);
+          }
           for (const key of ["runs", "jobs", "logs", "contents"]) {
             if (input[key]) Object.assign(state[key], input[key]);
           }
@@ -258,7 +264,7 @@ const server = https.createServer(
           return send(res, 401, { message: "A GitHub App JWT is required" });
         if (state.scenario.token === "error")
           return send(res, 500, { message: "fixture token failure" });
-        if (tokenRoute[1] !== state.installationId)
+        if (!state.knownInstallationIds.has(tokenRoute[1]))
           return send(res, 404, { message: "Not Found" });
         return send(res, 201, {
           token: "ghs_fixture_" + crypto.randomBytes(16).toString("hex"),

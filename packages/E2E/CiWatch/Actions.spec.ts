@@ -39,6 +39,7 @@ import {
   linkDiscordUser,
   messageText,
   provisionProject,
+  releaseProject,
   repoFullName,
   routes,
   seedGreen,
@@ -92,7 +93,7 @@ test.afterEach(
 
 test.afterAll(async (): Promise<void> => {
   await discordFixture.scenario("valid");
-  await project?.context.close();
+  await releaseProject(project);
 });
 
 async function raiseAlert(label: string): Promise<Alert> {

@@ -21,6 +21,7 @@ import {
   programFailure,
   provisionProject,
   reconcile,
+  releaseProject,
   repoFullName,
   runListEntry,
   sampleFailureLog,
@@ -64,7 +65,7 @@ test.afterEach(
 );
 
 test.afterAll(async (): Promise<void> => {
-  await project?.context.close();
+  await releaseProject(project);
 });
 
 async function monitorFailures(): Promise<Array<JSONish>> {
@@ -332,6 +333,6 @@ test("FM11 an empty body from the GitHub API is a monitor failure in a fresh pro
     }, 1);
   } finally {
     await githubFixture.program({ scenario: { runs: "ok" } });
-    await fresh.context.close();
+    await releaseProject(fresh);
   }
 });

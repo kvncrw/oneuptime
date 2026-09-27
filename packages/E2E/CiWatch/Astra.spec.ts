@@ -19,6 +19,7 @@ import {
   githubFixture,
   llmFixture,
   provisionProject,
+  releaseProject,
   seedGreen,
   threadIdForWorkflow,
   uniqueWorkflow,
@@ -67,7 +68,7 @@ test.afterEach(
 );
 
 test.afterAll(async (): Promise<void> => {
-  await project?.context.close();
+  await releaseProject(project);
 });
 
 async function alertInThread(

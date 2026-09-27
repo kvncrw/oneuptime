@@ -22,6 +22,7 @@ import {
   nextRunId,
   programFailure,
   provisionProject,
+  releaseProject,
   secretLiterals,
   seedGreen,
   uniqueWorkflow,
@@ -77,7 +78,7 @@ test.afterEach(
 );
 
 test.afterAll(async (): Promise<void> => {
-  await project?.context.close();
+  await releaseProject(project);
 });
 
 async function llmCalls(): Promise<number> {

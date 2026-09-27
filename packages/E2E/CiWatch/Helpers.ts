@@ -315,6 +315,22 @@ export const llmFixture: {
 let runCounter: number = Math.floor(Date.now() / 1000) * 100;
 let workflowCounter: number = Math.floor(Date.now() / 1000);
 
+/*
+ * Every provisioned project binds its own GitHub App installation id. The
+ * app fans a workflow_run out to every project whose repository is bound to
+ * the delivering installation, so with one shared id every earlier project
+ * (another spec file, or a beforeAll re-run after a worker restart) would
+ * alert too and double every "exactly one" count. The id is looked up by
+ * the page that owns the project, so a fresh project provisioned inside a
+ * test cannot steer the file-level project's deliveries.
+ */
+const installationByPage: WeakMap<Page, string> = new WeakMap<Page, string>();
+let currentInstallationId: string = github.installationId;
+
+export function installationFor(page: Page): string {
+  return installationByPage.get(page) || currentInstallationId;
+}
+
 export interface WorkflowRef {
   id: string;
   name: string;
@@ -339,6 +355,7 @@ export interface RunOptions {
   repository?: string | undefined;
   headSha?: string | undefined;
   action?: string | undefined;
+  installationId?: string | undefined;
 }
 
 // The `workflow_run` webhook body, in GitHub's shape, for one completed run.
@@ -381,7 +398,9 @@ export function workflowRunPayload(options: RunOptions): JSONish {
       default_branch: github.defaultBranch,
       owner: { login: owner },
     },
-    installation: { id: Number(github.installationId) },
+    installation: {
+      id: Number(options.installationId || currentInstallationId),
+    },
     sender: { login: "ci-e2e-bot", type: "User" },
   };
 }
@@ -412,12 +431,19 @@ export interface DeliveryOptions {
   event?: string | undefined;
 }
 
-// Delivers one signed workflow_run webhook as GitHub would. Returns the response.
+/*
+ * Delivers one signed workflow_run webhook as GitHub would, from the
+ * installation bound to the page's project. Returns the response.
+ */
 export async function deliverWebhook(
   page: Page,
   payload: JSONish,
   options: DeliveryOptions = {},
 ): Promise<{ response: APIResponse; deliveryId: string; body: string }> {
+  payload = {
+    ...payload,
+    installation: { id: Number(installationFor(page)) },
+  };
   const body: string = JSON.stringify(payload);
   const deliveryId: string =
     options.deliveryId || `e2e-${randomBytes(8).toString("hex")}`;
@@ -917,6 +943,7 @@ export interface ProvisionedProject {
   userId: string;
   codeRepositoryId: string;
   configId: string;
+  installationId: string;
 }
 
 export const headers: (projectId: string) => Record<string, string> = (
@@ -1009,7 +1036,7 @@ export async function connectGitHub(
     )
     .toBe(true);
   expect(String(repository!["gitHubAppInstallationId"])).toBe(
-    github.installationId,
+    installationFor(page),
   );
   return toId(repository!["_id"]);
 }
@@ -1116,6 +1143,10 @@ export async function provisionProject(
   const userId: string = (await getSessionUser({ page })).userId;
   await githubFixture.reset();
   await llmFixture.reset();
+  const installationId: string = String(Date.now());
+  await githubFixture.program({ installationId });
+  installationByPage.set(page, installationId);
+  currentInstallationId = installationId;
   await connectDiscord(page, projectId);
   const codeRepositoryId: string = await connectGitHub(page, projectId);
   const configId: string = await createConfig(page, projectId);
@@ -1125,7 +1156,37 @@ export async function provisionProject(
   if (options.seedRepository !== false) {
     await seedRepository(page, projectId);
   }
-  return { context, page, projectId, userId, codeRepositoryId, configId };
+  return {
+    context,
+    page,
+    projectId,
+    userId,
+    codeRepositoryId,
+    configId,
+    installationId,
+  };
+}
+
+/*
+ * Switches the project's CI watch off before closing its browser context.
+ * The ten-minute reconcile worker sweeps every enabled project, and a
+ * finished spec's project must not keep posting into the shared fixture
+ * channel while a later spec counts messages there.
+ */
+export async function releaseProject(
+  project: ProvisionedProject | undefined,
+): Promise<void> {
+  if (!project) {
+    return;
+  }
+  try {
+    await updateItem(project.page, project.projectId, routes.config, project.configId, {
+      isEnabled: false,
+    });
+  } catch {
+    // The context may already be unusable; the worker restart case.
+  }
+  await project.context.close();
 }
 
 /*
