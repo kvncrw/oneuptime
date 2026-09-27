@@ -30,6 +30,7 @@ export default tseslint.config(
       "**/*.js", // TODO: Remove this ignore
       "packages/Probe/Tests/Utils/Monitors/SyntheticRuntime/Fixtures/ProcessRunnerWorker.cjs", // CommonJS fork fixture is intentionally outside the TypeScript project.
       "packages/E2E/Discord/Fixture/**/*.cjs", // Discord HTTPS fixture and local-stack helpers run as plain CommonJS outside the E2E TypeScript project.
+      "packages/E2E/CiWatch/Fixture/**/*.cjs", // GitHub and LLM fixtures for the CI watch suite, same shape as the Discord fixture.
       "**/tmp/",
       "**/temp/",
       "**/.tmp/",

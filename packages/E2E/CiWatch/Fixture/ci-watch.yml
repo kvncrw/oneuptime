@@ -1,0 +1,48 @@
+# Compose overlay for the CI watch acceptance suite. Layered on top of the
+# Discord fixture's compose.yml + protocol.yml with the same project name and
+# project directory (.scratch/discord-e2e), so relative paths below resolve
+# from there. Adds the GitHub and LLM fixtures, wires the GitHub App
+# environment into the app, and mounts the CiWatch suite into the runner.
+services:
+  app:
+    environment:
+      GITHUB_APP_ID: ${GITHUB_APP_ID}
+      GITHUB_APP_NAME: ${GITHUB_APP_NAME}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID}
+      GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY}
+      GITHUB_APP_WEBHOOK_SECRET: ${GITHUB_APP_WEBHOOK_SECRET}
+  github-fixture:
+    image: oneuptime-discord-e2e-tests:local
+    pull_policy: never
+    entrypoint: [node, /fixture/github-server.cjs]
+    environment:
+      CI_WATCH_FIXTURE_CONTROL_TOKEN: ${CI_WATCH_FIXTURE_CONTROL_TOKEN}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID}
+      GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET}
+    volumes:
+      - ../../packages/E2E/CiWatch/Fixture:/fixture:ro
+      - fixture-private:/fixture-certs:ro
+    networks:
+      oneuptime:
+        aliases: [api.github.com, github.com, github-fixture]
+  llm-fixture:
+    image: oneuptime-discord-e2e-tests:local
+    pull_policy: never
+    entrypoint: [node, /fixture/llm-server.cjs]
+    environment:
+      CI_WATCH_FIXTURE_CONTROL_TOKEN: ${CI_WATCH_FIXTURE_CONTROL_TOKEN}
+    volumes:
+      - ../../packages/E2E/CiWatch/Fixture:/fixture:ro
+    networks:
+      oneuptime:
+        aliases: [llm-fixture]
+  e2e:
+    environment:
+      CI_WATCH_FIXTURE_CONTROL_TOKEN: ${CI_WATCH_FIXTURE_CONTROL_TOKEN}
+      GITHUB_APP_WEBHOOK_SECRET: ${GITHUB_APP_WEBHOOK_SECRET}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID}
+      GITHUB_APP_NAME: ${GITHUB_APP_NAME}
+    volumes:
+      - ../../packages/E2E/CiWatch:/usr/src/app/CiWatch:ro
+      - ../../packages/E2E/playwright.ci-watch.config.ts:/usr/src/app/playwright.ci-watch.config.ts:ro

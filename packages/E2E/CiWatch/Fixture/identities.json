@@ -1,0 +1,14 @@
+{
+  "appId": "100001",
+  "appName": "oneuptime-ci-watch-e2e",
+  "clientId": "Iv1.ciwatche2e000001",
+  "installationId": "90000001",
+  "owner": "ci-e2e",
+  "repository": "watched",
+  "secondRepository": "watched-two",
+  "unlinkedOwner": "other-org",
+  "unlinkedRepository": "unlinked",
+  "defaultBranch": "main",
+  "llmBaseUrl": "http://llm-fixture:8089/v1",
+  "llmModel": "fixture-model"
+}

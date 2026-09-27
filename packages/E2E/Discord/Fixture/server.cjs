@@ -27,6 +27,9 @@ let messageCounter = 0;
 // resolve them, like a real guild.
 let createdThreads = [];
 let threadCounter = 0;
+// CI watch (FM14): how many bot message posts the fixture has already failed
+// under the message-post-fails-once scenario. Reset with the scenario.
+let failedMessagePosts = 0;
 const snapshot = () => ({
   scenario,
   events,
@@ -128,6 +131,7 @@ const server = https.createServer(
           messageCounter = 0;
           createdThreads = [];
           threadCounter = 0;
+          failedMessagePosts = 0;
           return send(res, 200, snapshot());
         }
         if (pathname === "/__fixture/scenario" && req.method === "POST") {
@@ -143,10 +147,19 @@ const server = https.createServer(
             "different-guild",
             "user-not-in-guild",
             "guild-temporary",
+            // CI watch additions. `second-user`: the user sign-in flow
+            // resolves to identities.secondUserId (a second linked member).
+            // `message-post-fails-once`: the next bot message post answers
+            // 500, later ones succeed. `message-post-fails`: every bot message
+            // post answers 500. Existing scenarios are unchanged.
+            "second-user",
+            "message-post-fails-once",
+            "message-post-fails",
           ];
           if (!allowed.includes(input.scenario))
             return send(res, 400, { error: "Unknown scenario" });
           scenario = input.scenario;
+          failedMessagePosts = 0;
           return send(res, 200, snapshot());
         }
         return send(res, 404, { error: "Unknown control operation" });
@@ -247,12 +260,20 @@ const server = https.createServer(
       if (!bot && !grant)
         return send(res, 401, { message: "Unauthorized", code: 0 });
       const activeScenario = grant?.scenario || scenario;
+      // The OAuth user identity: identities.userId, or secondUserId when the
+      // grant was minted under the second-user scenario.
+      const grantUserId =
+        activeScenario === "second-user" ? ids.secondUserId : ids.userId;
       if (req.method === "GET" && route === "/users/@me") {
         if (!bot && activeScenario === "identity-failure")
           return send(res, 500, { message: "Fixture identity failure" });
         return send(res, 200, {
-          id: bot ? ids.botId : ids.userId,
-          username: bot ? "oneuptime-e2e-bot" : ids.username,
+          id: bot ? ids.botId : grantUserId,
+          username: bot
+            ? "oneuptime-e2e-bot"
+            : activeScenario === "second-user"
+              ? `${ids.username}-second`
+              : ids.username,
           global_name: bot ? "OneUptime E2E" : "Discord E2E User",
           bot,
           discriminator: "0",
@@ -285,7 +306,7 @@ const server = https.createServer(
         )
           return send(res, 404, { message: "Unknown Member", code: 10007 });
         return send(res, 200, {
-          user: { id: ids.userId, username: ids.username },
+          user: { id: grantUserId, username: ids.username },
           roles: [],
           joined_at: "2026-01-01T00:00:00Z",
         });
@@ -322,6 +343,15 @@ const server = https.createServer(
               id: ids.userId,
               username: ids.username,
               global_name: ids.username,
+            },
+          });
+        // The second linked member (CI watch permission cases).
+        if (suffix === `/members/${ids.secondUserId}`)
+          return send(res, 200, {
+            user: {
+              id: ids.secondUserId,
+              username: `${ids.username}-second`,
+              global_name: `${ids.username}-second`,
             },
           });
         if (suffix === "/roles")
@@ -363,6 +393,15 @@ const server = https.createServer(
           body = JSON.parse(await readBody(req));
         } catch {
           return send(res, 400, { message: "Malformed message body" });
+        }
+        // CI watch FM14: a failing Discord post. The request is still counted
+        // in `events`, which is how a test tells "retried once" from "gave up".
+        if (
+          scenario === "message-post-fails" ||
+          (scenario === "message-post-fails-once" && failedMessagePosts === 0)
+        ) {
+          failedMessagePosts++;
+          return send(res, 500, { message: "Fixture message post failure" });
         }
         const message = {
           id: `3000000000000${String(++messageCounter).padStart(4, "0")}`,
@@ -418,14 +457,43 @@ const server = https.createServer(
         }
         postedMessages.push({
           id: `3000000000000${String(++messageCounter).padStart(4, "0")}`,
-          channel_id: identities.channelId,
+          channel_id: ids.channelId,
           content: body.content || "",
           embeds: body.embeds || [],
           components: body.components || [],
           interaction_token: followupRoute[2],
+          webhook_kind: "interaction",
           timestamp: new Date().toISOString(),
         });
         return send(res, 200, { message: "Fixture followup accepted" });
+      }
+      // The deferred-interaction terminal response: the app edits the
+      // original (type 5) acknowledgement in place. Recorded like a followup
+      // so specs can wait for the outcome by interaction token.
+      const originalRoute = route.match(
+        /^\/webhooks\/(\d+)\/([A-Za-z0-9_.-]+)\/messages\/@original$/,
+      );
+      if (req.method === "PATCH" && originalRoute) {
+        let body;
+        try {
+          body = JSON.parse(await readBody(req));
+        } catch {
+          return send(res, 400, { message: "Malformed original edit body" });
+        }
+        const edited = {
+          id: `3000000000000${String(++messageCounter).padStart(4, "0")}`,
+          channel_id: ids.channelId,
+          content: body.content || "",
+          embeds: body.embeds || [],
+          components: body.components || [],
+          flags: body.flags,
+          interaction_token: originalRoute[2],
+          webhook_kind: "interaction",
+          edited_original: true,
+          timestamp: new Date().toISOString(),
+        };
+        postedMessages.push(edited);
+        return send(res, 200, edited);
       }
       unhandled.push(`${req.method} ${pathname}`);
       return send(res, 404, { message: "Unmodeled Discord fixture request" });
