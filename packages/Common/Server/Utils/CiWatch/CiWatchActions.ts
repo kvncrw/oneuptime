@@ -215,6 +215,18 @@ export default class CiWatchActions {
       props: scope.props,
     });
 
+    // The workflow keeps its first ticket; a later issue does not replace it.
+    if (!loaded.workflow.ticketUrl) {
+      await CiWorkflowService.updateOneBy({
+        query: {
+          _id: loaded.workflow.id!.toString(),
+          projectId: scope.projectId,
+        },
+        data: { ticketUrl: issueUrl },
+        props: scope.props,
+      });
+    }
+
     await CiWatchActions.say(scope, loaded, `Issue filed: ${issueUrl}`);
 
     return { reply: `Issue filed: ${issueUrl}` };

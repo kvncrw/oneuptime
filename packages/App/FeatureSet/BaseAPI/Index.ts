@@ -771,6 +771,7 @@ import DiscordResourceThreadService, {
   Service as DiscordResourceThreadServiceType,
 } from "Common/Server/Services/DiscordResourceThreadService";
 import DiscordResourceThreadAPI from "Common/Server/API/DiscordResourceThreadAPI";
+import CiWatchAPI from "Common/Server/API/CiWatchAPI";
 import HostService, {
   Service as HostServiceType,
 } from "Common/Server/Services/HostService";
@@ -5039,6 +5040,7 @@ const BaseAPIFeatureSet: FeatureSet = {
       `/${APP_NAME.toLocaleLowerCase()}`,
       new DiscordResourceThreadAPI().getRouter(),
     );
+    app.use(`/${APP_NAME.toLocaleLowerCase()}`, new CiWatchAPI().getRouter());
     app.use(
       `/${APP_NAME.toLocaleLowerCase()}`,
       new MicrosoftTeamsAPI().getRouter(),
